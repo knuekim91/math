@@ -375,7 +375,7 @@
   }
   function renderAuth(user) {
     $('authBox').innerHTML = user
-      ? `<span class="auth-user">${esc(user.email)}</span><button class="auth-btn" onclick="logout()">로그아웃</button>`
+      ? `<span class="auth-user">${esc(user.user_metadata?.name || user.email)}</span><input id="authName" placeholder="표시 이름" value="${esc(user.user_metadata?.name || '')}" /><button class="auth-btn" onclick="saveName()">이름 저장</button><button class="auth-btn" onclick="logout()">로그아웃</button>`
       : `<input id="authEmail" type="email" placeholder="이메일 주소" /><button class="auth-btn" onclick="sendLink()">로그인 링크 받기</button><span id="authMsg" class="auth-msg"></span>`;
   }
   window.sendLink = async () => {
@@ -395,6 +395,14 @@
     $('authMsg').textContent = text;
   };
   window.logout = async () => { await db.auth.signOut(); renderAuth(null); };
+  // 표시 이름 저장: 다른 풀이 작성자 이름으로 쓰입니다.
+  window.saveName = async () => {
+    const name = $('authName').value.trim();
+    if (!name) return showError('표시 이름을 입력해 주세요.');
+    const { data, error } = await db.auth.updateUser({ data: { name } });
+    if (error) return showError('이름 저장 실패: ' + error.message);
+    renderAuth(data.user);
+  };
   db.auth.onAuthStateChange((_event, session) => renderAuth(session?.user || null));
 
   window.rate = async (id, stars) => {
@@ -542,7 +550,7 @@
     });
     if (!up.ok) return showError('이미지 업로드 실패');
     const image_url = `${SUPABASE_URL}/storage/v1/object/public/solution-images/${path}`;
-    const alts = [...(ITEMS[id].alt_solutions || []), { title: `다른 풀이 ${(ITEMS[id].alt_solutions || []).length + 1}`, author: author.email, text, image_url, created_at: new Date().toISOString() }];
+    const alts = [...(ITEMS[id].alt_solutions || []), { title: `다른 풀이 ${(ITEMS[id].alt_solutions || []).length + 1}`, author: author.user_metadata?.name || '익명', text, image_url, created_at: new Date().toISOString() }];
     const patch = await fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${id}`, {
       method: 'PATCH',
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
