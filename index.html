@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>MathWorld 문항 추천</title>
+<title>데프니의 수능 수학 탐구</title>
 <style>
   :root {
     --main: #1f4e8c; --main-light: #e8f0fb; --accent: #f08c2e;
@@ -14,13 +14,35 @@
   body { margin: 0; font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; background: var(--bg); color: var(--text); }
 
   header { background: var(--main); color: #fff; padding: 16px 28px; display: flex; align-items: center; gap: 12px; }
-  header .logo { width: 34px; height: 34px; border-radius: 8px; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: bold; }
+  header .logo { width: 40px; height: 40px; border-radius: 8px; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: bold; }
   header h1 { font-size: 20px; margin: 0; }
   header p { margin: 0; font-size: 13px; opacity: 0.85; }
 
   .layout { display: flex; min-height: calc(100vh - 70px); }
 
-  nav { width: 280px; background: #fff; border-right: 1px solid var(--line); overflow-y: auto; padding: 8px 0 16px; max-height: calc(100vh - 70px); position: sticky; top: 0; }
+  /* 왼쪽 메뉴: 세로 탭(MENU) 하나, 누르면 컴팩트 메뉴 펼침 */
+  #side { display: flex; width: 40px; flex-shrink: 0; background: #fff; border-right: 1px solid var(--line); position: sticky; top: 0; height: calc(100vh - 70px); transition: width 0.2s ease; }
+  #side.open { width: 300px; }
+  #sidePanel { width: 0; height: 100%; overflow: hidden; display: flex; flex-direction: column; transition: width 0.2s ease; }
+  #side.open #sidePanel { width: 260px; }
+  .side-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .row-label { font-size: 12px; font-weight: bold; color: var(--muted); width: 100%; }
+  .side-btn { background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; padding: 5px 10px; font-size: 13px; font-weight: bold; color: var(--main); cursor: pointer; white-space: nowrap; }
+  .side-btn:hover { background: var(--main-light); }
+  .side-btn.active { background: var(--main-light); border-left: 3px solid var(--accent); }
+  #examPanel { display: none; padding: 16px 14px; font-size: 13px; color: var(--muted); }
+  #side.view-exam #examPanel { display: block; }
+  #side.view-exam #nav { display: none !important; }
+  #navTab { writing-mode: vertical-rl; width: 40px; flex-shrink: 0; background: var(--main); color: #fff; border: none; cursor: pointer; font-size: 13px; font-weight: bold; letter-spacing: 4px; padding: 16px 0; }
+  #navTab:hover { background: #173b6b; }
+  #nav { display: none; flex: 1; overflow-y: auto; padding: 6px 0 16px; font-size: 13px; }
+  #side.open.view-concept #nav { display: block; }
+  #nav .acc-btn { padding: 7px 12px; font-size: 13px; }
+  #nav .acc-btn.subject { font-size: 14px; }
+  #nav .acc-btn.unit { padding-left: 22px; font-size: 12px; }
+  #nav .sub-title { padding: 6px 12px 2px 32px; font-size: 11px; }
+  #nav .concept-btn { padding: 5px 10px 5px 40px; font-size: 13px; }
+  #nav .soon { padding: 6px 12px 8px 24px; }
 
   .acc-item > .acc-body { display: none; }
   .acc-item.open > .acc-body { display: block; }
@@ -77,24 +99,83 @@
   .empty { background: #fff; border: 1px dashed #cbd5e1; border-radius: 14px; padding: 30px; text-align: center; color: var(--muted); }
   #error { color: #b91c1c; margin-bottom: 12px; }
 
+  /* 문항 기능: 별점 · 버튼 · 정답/풀이 블록 */
+  [hidden] { display: none !important; }
+  .badge.lv { background: var(--main-light); color: var(--main); }
+  .actions { display: flex; gap: 8px; margin: 12px 0 4px; }
+  button.ghost { background: #fff; color: var(--main); border: 1px solid var(--main); border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+  button.ghost:hover { background: var(--main-light); }
+  .block { margin-top: 10px; padding: 14px 16px; background: #fafbff; border: 1px solid var(--line); border-radius: 10px; }
+  .block-title { font-size: 13px; font-weight: bold; color: var(--main); margin: 4px 0 6px; }
+  .block-title + .solution + .block-title { margin-top: 14px; }
+  .solution { font-size: 15px; line-height: 1.75; }
+  .alt { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .alt-title { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .alt-text { font-size: 14px; line-height: 1.6; margin-bottom: 6px; }
+  .alt-img { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .alt-add { display: flex; gap: 8px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+  .alt-add input[type=text] { flex: 1; min-width: 180px; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+  label.upload { background: var(--accent); color: #fff; border-radius: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer; }
+  .rating { display: flex; align-items: center; gap: 4px; margin-top: 14px; flex-wrap: wrap; }
+  .rate-label { font-size: 13px; color: var(--muted); margin-right: 6px; }
+  .star { background: none; border: none; font-size: 20px; color: #d1d5db; cursor: pointer; padding: 0 2px; }
+  .star:hover { color: var(--accent); }
+  .rate-avg { font-size: 13px; color: var(--muted); margin-left: 8px; }
+
+  /* 전국연합 문항 이미지 */
+  .exam-month { font-size: 17px; margin: 22px 0 10px; color: var(--main); }
+  .exam-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+  figure.problem { margin: 0; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  figure.problem img { display: block; width: 100%; height: auto; }
+  figure.problem figcaption { font-size: 12px; color: var(--muted); margin-top: 6px; text-align: right; }
+
   @media (max-width: 760px) {
     .layout { flex-direction: column; }
-    nav { width: 100%; max-height: 260px; position: static; border-right: none; border-bottom: 1px solid var(--line); }
+    #side { width: 100%; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--line); flex-direction: column; }
+    #side.open { width: 100%; }
+    #side.open #sidePanel { width: 100%; }
+    #navTab { writing-mode: horizontal-tb; width: 100%; height: 36px; padding: 0 16px; letter-spacing: 1px; text-align: left; }
+    #sidePanel { height: auto; }
+    #nav { max-height: 260px; }
     main { padding: 16px; }
   }
 </style>
 </head>
 <body>
 <header>
-  <div class="logo">M</div>
+  <div class="logo">
+    <svg viewBox="0 0 40 40" width="40" height="40" aria-hidden="true">
+      <text x="20" y="31" font-size="32" font-family="Times New Roman, serif" fill="#fff" text-anchor="middle">Σ</text>
+    </svg>
+  </div>
   <div>
-    <h1>MathWorld</h1>
-    <p>고등학교 수학 개념별 문항 추천</p>
+    <h1>데프니의 수능 수학 탐구</h1>
+    <p>마지막이라 생각말고 끝까지 최선을</p>
   </div>
 </header>
 
 <div class="layout">
-  <nav id="nav"></nav>
+  <aside id="side">
+    <button id="navTab" aria-expanded="false">MENU</button>
+    <div id="sidePanel">
+      <div class="side-row">
+        <span class="row-label">개념</span>
+        <button class="side-btn subj-btn" data-subject="공통수학1">공수1</button>
+        <button class="side-btn subj-btn" data-subject="공통수학2">공수2</button>
+        <button class="side-btn subj-btn" data-subject="대수">대수</button>
+        <button class="side-btn subj-btn" data-subject="미적분">미적분</button>
+        <button class="side-btn subj-btn" data-subject="확률과통계">확통</button>
+      </div>
+      <div class="side-row">
+        <span class="row-label">전국연합</span>
+        <button class="side-btn grade-btn" data-grade="고1">고1</button>
+        <button class="side-btn grade-btn" data-grade="고2">고2</button>
+        <button class="side-btn grade-btn" data-grade="고3">고3</button>
+      </div>
+      <div id="nav"></div>
+      <div id="examPanel">전국연합 기출 문항은 준비 중입니다.</div>
+    </div>
+  </aside>
   <main>
     <div id="error"></div>
     <h2 class="heading" id="heading">개념을 선택하세요</h2>
@@ -108,6 +189,7 @@
   const SUPABASE_URL = 'https://syalqcgnualsznjfgbhl.supabase.co';
   const SUPABASE_ANON_KEY = 'sb_publishable_1UNLM-L5teNNXk0zBq0S_g_kVFSAvhm';
   const SUBJECTS = ['공통수학1', '공통수학2', '대수', '미적분', '확률과통계'];
+  const SUBJ_HTML = {};
 
   const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const $ = (id) => document.getElementById(id);
@@ -127,10 +209,9 @@
       (tree[c.subject][c.unit][c.sub_unit] ||= []).push(c);
     });
 
-    let html = '';
     SUBJECTS.forEach((subject, si) => {
       const units = tree[subject];
-      html += `<div class="acc-item">
+      let html = `<div class="acc-item">
         <button class="acc-btn subject" onclick="toggleAcc(this)">${esc(subject)}<span class="arrow">▸</span></button>
         <div class="acc-body">`;
       if (!units) {
@@ -150,8 +231,14 @@
         });
       }
       html += '</div></div>';
+      SUBJ_HTML[subject] = html;
     });
-    $('nav').innerHTML = html;
+    showSubject(SUBJECTS[0]);
+  }
+
+  // 선택한 과목의 단원 목록만 보여줍니다.
+  function showSubject(subject) {
+    $('nav').innerHTML = SUBJ_HTML[subject] || '<div class="soon">준비 중입니다</div>';
 
     $('nav').querySelectorAll('.concept-btn').forEach(btn => {
       btn.onclick = () => selectConcept(btn);
@@ -199,10 +286,12 @@
     loadItems(Number(btn.dataset.id));
   }
 
+  let currentConcept = null;
   async function loadItems(conceptId) {
+    currentConcept = conceptId;
     $('items').innerHTML = '<div class="muted">불러오는 중…</div>';
     const { data, error } = await db.from('items')
-      .select('id, difficulty, question_text, answer, solution_steps, choices')
+      .select('id, difficulty, difficulty_level, question_text, answer, solution_steps, choices, alt_solutions')
       .eq('concept_id', conceptId)
       .order('difficulty');
     if (error) return showError(error.message);
@@ -210,11 +299,102 @@
     $('items').innerHTML = visible.length
       ? visible.map(itemCard).join('')
       : '<div class="empty">이 개념에 연결된 문항이 아직 없습니다.</div>';
+    visible.forEach(it => { ITEMS[it.id] = it; loadRating(it.id); });
   }
+
+  // 별점 라벨 (별 1~5)
+  const LEVELS = { 1: '암산', 2: '쉬움', 3: '보통', 4: '어렵', 5: '킬러' };
+  const ITEMS = {};
+  const RATER_KEY = 'mathworld_rater_id';
+  const raterId = localStorage.getItem(RATER_KEY) || (localStorage.setItem(RATER_KEY, crypto.randomUUID()), localStorage.getItem(RATER_KEY));
 
   function badge(d) {
     return `<span class="badge ${d || 'none'}">${d ? d : '난이도 미정'}</span>`;
   }
+
+  function levelBadge(lv) {
+    return lv
+      ? `<span class="badge lv">★${lv} ${LEVELS[lv]}</span>`
+      : '<span class="badge none">난이도 미정</span>';
+  }
+
+  function starRow(id) {
+    const shown = '아직 평가 없음';
+    const stars = [1, 2, 3, 4, 5].map(n =>
+      `<button class="star" onclick="rate('${id}', ${n})" aria-label="${n}점">★</button>`).join('');
+    return `<div class="rating"><span class="rate-label">내가 느끼는 난이도</span>${stars}<span class="rate-avg" id="avg-${id}">${shown}</span></div>`;
+  }
+
+  async function loadRating(id) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/item_rating_summary?select=avg_stars,rating_count&item_id=eq.${id}`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    }).then(r => r.json()).catch(() => []);
+    const el = $('avg-' + id);
+    if (el && r[0]) el.textContent = `평균 ${r[0].avg_stars} (${r[0].rating_count}명)`;
+  }
+
+  window.rate = async (id, stars) => {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/item_ratings?on_conflict=item_id,rater_id`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({ item_id: id, rater_id: raterId, stars })
+    });
+    if (!res.ok) return showError('별점 저장 실패');
+    $('avg-' + id).textContent = '별점이 저장되었습니다';
+    loadRating(id);
+  };
+
+  window.toggleBlock = (id, kind) => {
+    const box = $(`${kind}-${id}`);
+    box.hidden = !box.hidden;
+  };
+
+  function solutionBlock(it) {
+    const steps = (it.solution_steps || []).map(esc).join('<br>');
+    const alts = (it.alt_solutions || []).map(a => `
+      <div class="alt">
+        <div class="alt-title">${esc(a.title || '다른 풀이')}</div>
+        ${a.text ? `<div class="alt-text">${esc(a.text)}</div>` : ''}
+        ${a.image_url ? `<img class="alt-img" src="${esc(a.image_url)}" alt="다른 풀이 캡쳐" />` : ''}
+      </div>`).join('');
+    return `
+      <div class="block" id="sol-${it.id}" hidden>
+        <div class="block-title">풀이</div>
+        <div class="solution">${steps || '<span class="muted">풀이가 아직 없습니다.</span>'}</div>
+        <div class="block-title">다른 풀이</div>
+        ${alts || '<div class="muted">등록된 다른 풀이가 없습니다.</div>'}
+        <div class="alt-add">
+          <input type="text" id="alt-text-${it.id}" placeholder="다른 풀이 설명 (선택)" />
+          <label class="upload">캡쳐 파일 선택
+            <input type="file" accept="image/*" hidden onchange="addAlt('${it.id}', this)" />
+          </label>
+        </div>
+      </div>`;
+  }
+
+  window.addAlt = async (id, input) => {
+    const file = input.files[0];
+    if (!file) return;
+    const text = $('alt-text-' + id).value.trim();
+    const path = `${id}/${Date.now()}_${file.name.replace(/[^\w.\-]/g, '_')}`;
+    const up = await fetch(`${SUPABASE_URL}/storage/v1/object/solution-images/${path}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': file.type },
+      body: file
+    });
+    if (!up.ok) return showError('이미지 업로드 실패');
+    const image_url = `${SUPABASE_URL}/storage/v1/object/public/solution-images/${path}`;
+    const alts = [...(ITEMS[id].alt_solutions || []), { title: `다른 풀이 ${(ITEMS[id].alt_solutions || []).length + 1}`, text, image_url, created_at: new Date().toISOString() }];
+    const patch = await fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alt_solutions: alts })
+    });
+    if (!patch.ok) return showError('다른 풀이 저장 실패');
+    ITEMS[id].alt_solutions = alts;
+    loadItems(currentConcept);
+  };
 
   function itemCard(it) {
     const parts = it.id.split('-');
@@ -235,11 +415,26 @@
          </div>
          <div id="res-${it.id}"></div>`
       : '<div class="muted" style="margin-top:8px">기출 문제는 본문을 공개하지 않습니다. 아래 추천 문항을 확인하세요.</div>';
+    const hasAnswer = it.answer !== null && it.answer !== undefined && it.answer !== '';
+    const answerBlock = `
+      <div class="block" id="ansb-${it.id}" hidden>
+        <div class="block-title">정답</div>
+        <div class="solution">${hasAnswer ? esc(it.answer) : '<span class="muted">정답이 아직 입력되지 않았습니다.</span>'}</div>
+      </div>`;
+    const actions = `
+      <div class="actions">
+        <button class="ghost" onclick="toggleBlock('${it.id}', 'ansb')">정답 보기</button>
+        <button class="ghost" onclick="toggleBlock('${it.id}', 'sol')">풀이 · 다른 풀이</button>
+      </div>`;
     return `
       <div class="card">
         <button class="wrong-btn" onclick="wrong('${it.id}')">틀림</button>
-        <div class="card-head">${badge(it.difficulty)}<span class="card-title">${esc(title)}</span></div>
+        <div class="card-head">${levelBadge(it.difficulty_level)}<span class="card-title">${esc(title)}</span></div>
         ${body}
+        ${actions}
+        ${answerBlock}
+        ${solutionBlock(it)}
+        ${starRow(it.id)}
         <div id="rec-${it.id}"></div>
       </div>`;
   }
@@ -278,6 +473,67 @@
   };
 
   function showError(msg) { $('error').textContent = '오류: ' + msg; }
+
+  // MENU 탭: 누르면 오른쪽으로 펼쳐지고, 다시 누르면 왼쪽으로 접힙니다.
+  $('navTab').onclick = () => {
+    const side = $('side');
+    const open = side.classList.toggle('open');
+    $('navTab').setAttribute('aria-expanded', String(open));
+  };
+
+  // 개념 / 전국연합 선택
+  // 개념 과목 또는 전국연합 학년 중 하나만 선택됩니다.
+  function setSelected(btn) {
+    document.querySelectorAll('.subj-btn, .grade-btn').forEach(b => b.classList.toggle('active', b === btn));
+  }
+
+  document.querySelectorAll('.subj-btn').forEach(btn => {
+    btn.onclick = () => {
+      setSelected(btn);
+      const side = $('side');
+      side.classList.remove('view-exam');
+      side.classList.add('view-concept');
+      $('items').innerHTML = '';
+      showSubject(btn.dataset.subject);
+    };
+  });
+  document.querySelectorAll('.grade-btn').forEach(btn => {
+    btn.onclick = () => {
+      setSelected(btn);
+      const side = $('side');
+      side.classList.remove('view-concept');
+      side.classList.add('view-exam');
+      showExam(btn.dataset.grade);
+    };
+  });
+  $('side').classList.add('view-concept');
+
+  // 전국연합 문항 이미지 (자른 파일 기준)
+  const EXAM = {
+    고1: { base: '전국연합/1학년', months: [{ m: 6, n: 30 }, { m: 9, n: 30 }, { m: 10, n: 30 }] },
+  };
+
+  function showExam(grade) {
+    $('heading').textContent = `전국연합 ${grade}`;
+    const info = EXAM[grade];
+    if (!info) {
+      $('sub').textContent = '';
+      $('items').innerHTML = '<div class="empty">준비 중입니다.</div>';
+      return;
+    }
+    $('sub').textContent = info.months.map(x => `${x.m}월`).join(' · ');
+    $('items').innerHTML = info.months.map(({ m, n }) => `
+      <h3 class="exam-month">${m}월</h3>
+      <div class="exam-grid">
+        ${Array.from({ length: n }, (_, i) => {
+          const k = String(i + 1).padStart(2, '0');
+          return `<figure class="problem">
+            <img loading="lazy" src="${encodeURI(`${info.base}/${m}월_문제_${k}.png`)}" alt="${m}월 ${i + 1}번" />
+            <figcaption>${i + 1}번</figcaption>
+          </figure>`;
+        }).join('')}
+      </div>`).join('');
+  }
 
   loadConcepts();
 </script>
