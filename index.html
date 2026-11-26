@@ -31,7 +31,10 @@
   .arrow { color: var(--muted); font-size: 12px; }
   .soon { color: var(--muted); font-weight: normal; font-size: 12px; padding: 8px 20px 12px 32px; }
 
-  .sub-title { font-size: 12px; color: var(--muted); padding: 8px 20px 2px 40px; }
+  .sub-title { display: block; width: 100%; background: none; border: none; text-align: left; font-size: 12px; color: var(--muted); padding: 8px 20px 2px 40px; cursor: pointer; }
+  .sub-title:hover { color: var(--main); }
+  .sum-tag { font-size: 11px; background: var(--accent); color: #fff; padding: 1px 6px; border-radius: 6px; margin-left: 4px; }
+  .summary-card ul { margin: 0; padding-left: 20px; line-height: 1.9; font-size: 15px; }
   .concept-btn { display: block; width: 100%; text-align: left; background: none; border: none; padding: 8px 20px 8px 48px; font-size: 14px; color: var(--text); cursor: pointer; border-left: 3px solid transparent; }
   .concept-btn:hover { background: var(--main-light); }
   .concept-btn.active { background: var(--main-light); border-left-color: var(--accent); font-weight: bold; color: var(--main); }
@@ -138,7 +141,7 @@
             <button class="acc-btn unit" onclick="toggleAcc(this)">${esc(unit)}<span class="arrow">▸</span></button>
             <div class="acc-body">`;
           Object.keys(units[unit]).forEach(sub => {
-            html += `<div class="sub-title">${esc(sub)}</div>`;
+            html += `<button class="sub-title sub-btn" data-sub="${esc(sub)}">${esc(sub)} <span class="sum-tag">요약</span></button>`;
             units[unit][sub].forEach(c => {
               html += `<button class="concept-btn" data-id="${c.id}" data-name="${esc(c.name)}" data-sub="${esc(subject)} · ${esc(sub)}">${esc(c.name)}</button>`;
             });
@@ -158,8 +161,26 @@
     firstSubject.classList.add('open');
     const firstUnit = firstSubject.querySelector('.acc-item');
     if (firstUnit) firstUnit.classList.add('open');
+    $('nav').querySelectorAll('.sub-btn').forEach(btn => {
+      btn.onclick = () => showSummary(btn.dataset.sub);
+    });
     const first = $('nav').querySelector('.concept-btn');
     if (first) selectConcept(first);
+  }
+
+  async function showSummary(sub) {
+    $('nav').querySelectorAll('.concept-btn').forEach(b => b.classList.remove('active'));
+    $('heading').textContent = sub;
+    $('sub').textContent = '소단원 요약 정리';
+    $('items').innerHTML = '<div class="muted">불러오는 중…</div>';
+    const { data, error } = await db.from('subunit_summaries')
+      .select('summary')
+      .eq('sub_unit', sub)
+      .maybeSingle();
+    if (error) return showError(error.message);
+    if (!data) { $('items').innerHTML = '<div class="empty">이 소단원의 요약은 아직 준비 중입니다.</div>'; return; }
+    const lines = data.summary.split('\n').filter(Boolean);
+    $('items').innerHTML = `<div class="card summary-card"><ul>${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>`;
   }
 
   // 같은 단계의 다른 항목은 접고, 누른 항목만 펼칩니다.
