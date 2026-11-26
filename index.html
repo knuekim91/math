@@ -113,7 +113,9 @@
   .block-title { font-size: 13px; font-weight: bold; color: var(--main); margin: 4px 0 6px; }
   .block-title + .solution + .block-title { margin-top: 14px; }
   .solution { font-size: 15px; line-height: 1.75; }
-  .alt { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .alt { position: relative; margin-top: 10px; padding: 10px 34px 10px 0; border-top: 1px dashed var(--line); }
+  .alt-del { position: absolute; top: 10px; right: 0; width: 24px; height: 24px; border: 1px solid #fecaca; border-radius: 50%; background: #fff5f5; color: #dc2626; font-size: 16px; line-height: 1; cursor: pointer; padding: 0; }
+  .alt-del:hover { background: #fee2e2; }
   .alt-title { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
   .alt-text { font-size: 14px; line-height: 1.6; margin-bottom: 6px; }
   .alt-img { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
@@ -412,8 +414,9 @@
 
   function solutionBlock(it) {
     const steps = (it.solution_steps || []).map(esc).join('<br>');
-    const alts = (it.alt_solutions || []).map(a => `
+    const alts = (it.alt_solutions || []).map((a, i) => `
       <div class="alt">
+        <button class="alt-del" title="삭제" onclick="delAlt('${it.id}', ${i})">×</button>
         <div class="alt-title">${esc(a.title || '다른 풀이')}</div>
         ${a.text ? `<div class="alt-text">${esc(a.text)}</div>` : ''}
         ${a.image_url ? `<img class="alt-img" src="${esc(a.image_url)}" alt="다른 풀이 캡쳐" />` : ''}
@@ -432,6 +435,30 @@
         </div>
       </div>`;
   }
+
+  // 다른 풀이 삭제 (로그인한 계정만 가능)
+  window.delAlt = async (id, idx) => {
+    const user = await currentUser();
+    if (!user) return showError('로그인 후 삭제할 수 있습니다.');
+    if (!confirm('이 다른 풀이를 삭제할까요?')) return;
+    const token = await currentToken();
+    const alts = (ITEMS[id].alt_solutions || []).filter((_, i) => i !== idx);
+    const patch = await fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alt_solutions: alts })
+    });
+    if (!patch.ok) return showError('다른 풀이 삭제 실패');
+    ITEMS[id].alt_solutions = alts;
+    const old = $('sol-' + id);
+    if (old) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = solutionBlock(ITEMS[id]);
+      const fresh = tmp.firstElementChild;
+      fresh.hidden = false;
+      old.replaceWith(fresh);
+    }
+  };
 
   window.addAlt = async (id, input) => {
     const file = input.files[0];
