@@ -397,11 +397,15 @@
   window.logout = async () => { await db.auth.signOut(); renderAuth(null); };
   // 표시 이름 저장: 다른 풀이 작성자 이름으로 쓰입니다.
   window.saveName = async () => {
+    const msg = (text) => { if ($('authMsg')) $('authMsg').textContent = text; };
     const name = $('authName').value.trim();
-    if (!name) return showError('표시 이름을 입력해 주세요.');
+    if (!name) return msg('표시 이름을 입력해 주세요.');
+    const user = await currentUser();
+    if (!user) return msg('로그인이 끝나지 않았습니다. 메일 링크로 다시 로그인해 주세요.');
     const { data, error } = await db.auth.updateUser({ data: { name } });
-    if (error) return showError('이름 저장 실패: ' + error.message);
+    if (error) return msg('이름 저장 실패: ' + error.message);
     renderAuth(data.user);
+    msg('이름이 저장되었습니다.');
   };
   db.auth.onAuthStateChange((_event, session) => renderAuth(session?.user || null));
 
