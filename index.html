@@ -185,8 +185,9 @@
       .eq('concept_id', conceptId)
       .order('difficulty');
     if (error) return showError(error.message);
-    $('items').innerHTML = data.length
-      ? data.map(itemCard).join('')
+    const visible = data.filter(it => !/^2026-/.test(it.id));
+    $('items').innerHTML = visible.length
+      ? visible.map(itemCard).join('')
       : '<div class="empty">이 개념에 연결된 문항이 아직 없습니다.</div>';
   }
 
