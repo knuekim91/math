@@ -363,15 +363,23 @@
   function renderAuth(user) {
     $('authBox').innerHTML = user
       ? `<span class="auth-user">${esc(user.email)}</span><button class="auth-btn" onclick="logout()">로그아웃</button>`
-      : `<input id="authEmail" type="email" placeholder="이메일 주소" /><button class="auth-btn" onclick="sendLink()">로그인 링크 받기</button>`;
+      : `<input id="authEmail" type="email" placeholder="이메일 주소" /><button class="auth-btn" onclick="sendLink()">로그인 링크 받기</button><span id="authMsg" class="auth-msg"></span>`;
   }
   window.sendLink = async () => {
     const email = $('authEmail').value.trim();
     if (!email) return;
+    const btn = document.querySelector('#authBox .auth-btn');
+    if (btn) btn.disabled = true;
     const { error } = await db.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href.split('#')[0] } });
-    $('authBox').insertAdjacentHTML('beforeend', error
-      ? `<span class="auth-msg">오류: ${esc(error.message)}</span>`
-      : '<span class="auth-msg">메일에서 로그인 링크를 눌러 주세요.</span>');
+    if (btn) setTimeout(() => { btn.disabled = false; }, 3000);
+    // 메시지는 한 줄만 보이도록 매번 덮어씁니다.
+    let text = '메일에서 로그인 링크를 눌러 주세요.';
+    if (error) {
+      text = /rate limit/i.test(error.message)
+        ? '메일 발송 횟수 제한에 걸렸습니다. 잠시 후 다시 시도해 주세요.'
+        : `로그인 메일 발송 실패: ${error.message}`;
+    }
+    $('authMsg').textContent = text;
   };
   window.logout = async () => { await db.auth.signOut(); renderAuth(null); };
   db.auth.onAuthStateChange((_event, session) => renderAuth(session?.user || null));
