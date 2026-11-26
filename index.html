@@ -591,7 +591,7 @@
     const render = (key) => {
       document.querySelectorAll('.exam-chip').forEach(b => b.classList.toggle('on', b.dataset.key === key));
       const shown = key ? sources.filter(s => s === key) : sources;
-      $('items').innerHTML = shown.map(src => `
+      $('examBody').innerHTML = shown.map(src => `
         <h3 class="exam-month">${esc(src)}</h3>
         <div class="exam-grid">${data.filter(it => it.source === src).map(examCard).join('')}</div>`).join('');
       data.forEach(it => loadRating(it.id));
