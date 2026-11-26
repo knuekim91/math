@@ -137,11 +137,13 @@
   .exam-chip { background: #fff; color: var(--main); border: 1px solid var(--main); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: bold; cursor: pointer; }
   .exam-chip:hover { background: var(--main-light); }
   .exam-chip.on { background: var(--main); color: #fff; }
-  .my-ans { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-  .pick-row { display: flex; gap: 6px; }
-  .pick { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 4px 10px; font-size: 15px; cursor: pointer; }
+  .my-ans { margin: 12px 0 10px; }
+  .pick-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .pick, .submit-btn { box-sizing: border-box; height: 30px; min-width: 34px; padding: 0 9px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-family: inherit; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; }
   .pick.on { background: var(--main); color: #fff; border-color: var(--main); }
-  .short-in { width: 120px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+  .submit-btn { background: var(--main); color: #fff; border-color: var(--main); font-weight: bold; }
+  .submit-btn:hover { background: #173b6b; }
+  .short-in { box-sizing: border-box; height: 30px; width: 110px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
   .ans-res { font-size: 14px; }
   .ok-t { color: #059669; }
   .ng-t { color: #dc2626; }
@@ -618,13 +620,13 @@
           ${levelBadge(it.difficulty_level)}
         </div>
         <img class="exam-img" loading="lazy" src="${esc(it.image_url)}" alt="${it.number}번 문항" />
+        ${answerForm(it)}
         <div class="actions">
           <button class="ghost" onclick="toggleBlock('${it.id}', 'ansb')">정답 보기</button>
           <button class="ghost" onclick="toggleBlock('${it.id}', 'sol')">풀이 · 다른 풀이</button>
         </div>
         ${answerBlock}
         ${solutionBlock(it)}
-        ${answerForm(it)}
         ${starRow(it.id)}
       </div>`;
   }
@@ -633,14 +635,13 @@
   const PENDING = {};
   function answerForm(it) {
     const inner = it.number <= 21
-      ? `<div class="pick-row">${[1, 2, 3, 4, 5].map(v =>
-          `<button class="pick" data-id="${it.id}" data-v="${v}" onclick="pickAns(this)">${'①②③④⑤'[v - 1]}</button>`).join('')}</div>`
+      ? [1, 2, 3, 4, 5].map(v =>
+          `<button class="pick" data-id="${it.id}" data-v="${v}" onclick="pickAns(this)">${'①②③④⑤'[v - 1]}</button>`).join('')
       : `<input class="short-in" id="ansin-${it.id}" placeholder="답 입력" />`;
     return `
       <div class="my-ans">
-        <span class="rate-label">내 답</span>${inner}
-        <button class="ghost" onclick="submitAns('${it.id}')">제출</button>
-        <span class="ans-res" id="res-${it.id}"></span>
+        <div class="pick-row">${inner}<button class="pick submit-btn" onclick="submitAns('${it.id}')">제출</button></div>
+        <div class="ans-res" id="res-${it.id}"></div>
       </div>`;
   }
 
