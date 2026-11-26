@@ -98,6 +98,10 @@
   .muted { color: var(--muted); font-size: 14px; }
   .empty { background: #fff; border: 1px dashed #cbd5e1; border-radius: 14px; padding: 30px; text-align: center; color: var(--muted); }
   #error { color: #b91c1c; margin-bottom: 12px; }
+  .auth { margin-left: auto; display: flex; gap: 6px; align-items: center; font-size: 12px; flex-wrap: wrap; }
+  .auth input { padding: 5px 8px; border-radius: 6px; border: none; font-size: 12px; width: 180px; }
+  .auth-btn { background: #fff; color: var(--main); border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: bold; cursor: pointer; }
+  .auth-user, .auth-msg { color: #fff; opacity: 0.9; }
 
   /* 문항 기능: 별점 · 버튼 · 정답/풀이 블록 */
   [hidden] { display: none !important; }
@@ -128,6 +132,8 @@
   figure.problem { margin: 0; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
   figure.problem img { display: block; width: 100%; height: auto; }
   figure.problem figcaption { font-size: 12px; color: var(--muted); margin-top: 6px; text-align: right; }
+  .exam-card .card-head { flex-wrap: wrap; }
+  .exam-img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 
   @media (max-width: 760px) {
     .layout { flex-direction: column; }
@@ -152,6 +158,7 @@
     <h1>데프니의 수능 수학 탐구</h1>
     <p>마지막이라 생각말고 끝까지 최선을</p>
   </div>
+  <div id="authBox" class="auth"></div>
 </header>
 
 <div class="layout">
@@ -186,8 +193,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-  const SUPABASE_URL = 'https://syalqcgnualsznjfgbhl.supabase.co';
-  const SUPABASE_ANON_KEY = 'sb_publishable_1UNLM-L5teNNXk0zBq0S_g_kVFSAvhm';
+  const SUPABASE_URL = 'https://utqvqickqqosvzgfxisv.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_UDQb4kjAiGz_YjvpKIViSw_u1cpXSG_';
   const SUBJECTS = ['공통수학1', '공통수학2', '대수', '미적분', '확률과통계'];
   const SUBJ_HTML = {};
 
@@ -200,7 +207,10 @@
       .select('id, subject, unit, sub_unit, name, kind')
       .eq('kind', '교과')
       .order('id');
-    if (error) return showError(error.message);
+    if (error) {
+      $('nav').innerHTML = '<div class="soon">개념 데이터를 불러오지 못했습니다.</div>';
+      return;
+    }
 
     const tree = {};
     data.forEach(c => {
@@ -333,12 +343,40 @@
     if (el && r[0]) el.textContent = `평균 ${r[0].avg_stars} (${r[0].rating_count}명)`;
   }
 
+  // 로그인 (이메일 링크 방식)
+  async function currentToken() {
+    const { data } = await db.auth.getSession();
+    return data.session?.access_token || null;
+  }
+  async function currentUser() {
+    const { data } = await db.auth.getSession();
+    return data.session?.user || null;
+  }
+  function renderAuth(user) {
+    $('authBox').innerHTML = user
+      ? `<span class="auth-user">${esc(user.email)}</span><button class="auth-btn" onclick="logout()">로그아웃</button>`
+      : `<input id="authEmail" type="email" placeholder="이메일 주소" /><button class="auth-btn" onclick="sendLink()">로그인 링크 받기</button>`;
+  }
+  window.sendLink = async () => {
+    const email = $('authEmail').value.trim();
+    if (!email) return;
+    const { error } = await db.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href.split('#')[0] } });
+    $('authBox').insertAdjacentHTML('beforeend', error
+      ? `<span class="auth-msg">오류: ${esc(error.message)}</span>`
+      : '<span class="auth-msg">메일에서 로그인 링크를 눌러 주세요.</span>');
+  };
+  window.logout = async () => { await db.auth.signOut(); renderAuth(null); };
+  db.auth.onAuthStateChange((_event, session) => renderAuth(session?.user || null));
+
   window.rate = async (id, stars) => {
+    const user = await currentUser();
+    if (!user) return showError('별점은 로그인 후 저장할 수 있습니다.');
+    const token = await currentToken();
     const res = await fetch(`${SUPABASE_URL}/rest/v1/item_ratings?on_conflict=item_id,rater_id`, {
       method: 'POST',
-      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
-      body: JSON.stringify({ item_id: id, rater_id: raterId, stars })
+      body: JSON.stringify({ item_id: id, rater_id: user.id, stars })
     });
     if (!res.ok) return showError('별점 저장 실패');
     $('avg-' + id).textContent = '별점이 저장되었습니다';
@@ -376,11 +414,13 @@
   window.addAlt = async (id, input) => {
     const file = input.files[0];
     if (!file) return;
+    const token = await currentToken();
+    if (!token) return showError('다른 풀이는 로그인 후 추가할 수 있습니다.');
     const text = $('alt-text-' + id).value.trim();
     const path = `${id}/${Date.now()}_${file.name.replace(/[^\w.\-]/g, '_')}`;
     const up = await fetch(`${SUPABASE_URL}/storage/v1/object/solution-images/${path}`, {
       method: 'POST',
-      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': file.type },
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': file.type },
       body: file
     });
     if (!up.ok) return showError('이미지 업로드 실패');
@@ -388,12 +428,13 @@
     const alts = [...(ITEMS[id].alt_solutions || []), { title: `다른 풀이 ${(ITEMS[id].alt_solutions || []).length + 1}`, text, image_url, created_at: new Date().toISOString() }];
     const patch = await fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${id}`, {
       method: 'PATCH',
-      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ alt_solutions: alts })
     });
     if (!patch.ok) return showError('다른 풀이 저장 실패');
     ITEMS[id].alt_solutions = alts;
-    loadItems(currentConcept);
+    if ($('side').classList.contains('view-exam')) showExam('고1');
+    else loadItems(currentConcept);
   };
 
   function itemCard(it) {
@@ -508,31 +549,52 @@
   });
   $('side').classList.add('view-concept');
 
-  // 전국연합 문항 이미지 (자른 파일 기준)
-  const EXAM = {
-    고1: { base: '전국연합/1학년', months: [{ m: 6, n: 30 }, { m: 9, n: 30 }, { m: 10, n: 30 }] },
-  };
-
-  function showExam(grade) {
+  // 전국연합 문항: DB(items)에서 EXAM-1G 문항을 읽어 카드로 보여줍니다.
+  async function showExam(grade) {
     $('heading').textContent = `전국연합 ${grade}`;
-    const info = EXAM[grade];
-    if (!info) {
+    if (grade !== '고1') {
       $('sub').textContent = '';
       $('items').innerHTML = '<div class="empty">준비 중입니다.</div>';
       return;
     }
-    $('sub').textContent = info.months.map(x => `${x.m}월`).join(' · ');
-    $('items').innerHTML = info.months.map(({ m, n }) => `
-      <h3 class="exam-month">${m}월</h3>
-      <div class="exam-grid">
-        ${Array.from({ length: n }, (_, i) => {
-          const k = String(i + 1).padStart(2, '0');
-          return `<figure class="problem">
-            <img loading="lazy" src="${encodeURI(`${info.base}/${m}월_문제_${k}.png`)}" alt="${m}월 ${i + 1}번" />
-            <figcaption>${i + 1}번</figcaption>
-          </figure>`;
-        }).join('')}
-      </div>`).join('');
+    $('items').innerHTML = '<div class="muted">불러오는 중…</div>';
+    const { data, error } = await db.from('items')
+      .select('id, source, number, points, image_url, answer, difficulty_level, solution_steps, alt_solutions')
+      .like('id', 'EXAM-1G-%')
+      .order('id');
+    if (error) return showError(error.message);
+    data.forEach(it => { ITEMS[it.id] = it; });
+    const sources = [...new Set(data.map(it => it.source))];
+    $('sub').textContent = sources.join(' · ');
+    $('items').innerHTML = sources.map(src => `
+      <h3 class="exam-month">${esc(src)}</h3>
+      <div class="exam-grid">${data.filter(it => it.source === src).map(examCard).join('')}</div>`).join('');
+    data.forEach(it => loadRating(it.id));
+  }
+
+  function examCard(it) {
+    const pts = it.points ? `${it.points}점` : '';
+    const answerBlock = `
+      <div class="block" id="ansb-${it.id}" hidden>
+        <div class="block-title">정답</div>
+        <div class="solution">${it.answer ? esc(it.answer) : '<span class="muted">정답이 아직 입력되지 않았습니다.</span>'}</div>
+      </div>`;
+    return `
+      <div class="card exam-card">
+        <div class="card-head">
+          <span class="card-title">${it.number}번</span>
+          <span class="muted">${esc(pts)}</span>
+          ${levelBadge(it.difficulty_level)}
+        </div>
+        <img class="exam-img" loading="lazy" src="${esc(it.image_url)}" alt="${it.number}번 문항" />
+        <div class="actions">
+          <button class="ghost" onclick="toggleBlock('${it.id}', 'ansb')">정답 보기</button>
+          <button class="ghost" onclick="toggleBlock('${it.id}', 'sol')">풀이 · 다른 풀이</button>
+        </div>
+        ${answerBlock}
+        ${solutionBlock(it)}
+        ${starRow(it.id)}
+      </div>`;
   }
 
   loadConcepts();
