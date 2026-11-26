@@ -448,12 +448,12 @@
     const steps = (it.solution_steps || []).map(esc).join('<br>');
     const alts = (it.alt_solutions || []).map((a, i) => `
       <div class="alt">
-        <button class="alt-del" title="삭제" data-owner="${esc(a.author_id || '')}" style="display:none" onclick="delAlt('${it.id}', ${i})">×</button>
-        <div class="alt-title">${esc(a.title || '다른 풀이')} <span class="alt-author">(${esc(a.author || '작성자 미기재')})</span></div>
+        <button class="alt-del" title="삭제" data-owner="${esc(a.author_id || '')}" style="display:none" onclick="delAlt('${it.id}', '${a.id}')">×</button>
+        <div class="alt-title">다른 풀이 ${i + 1} <span class="alt-author">(${esc(a.author_name || '익명')})</span></div>
         ${a.text ? `<div class="alt-text">${esc(a.text)}</div>` : ''}
         ${a.image_url ? `<img class="alt-img" src="${esc(a.image_url)}" alt="다른 풀이 캡쳐" />` : ''}
         <div class="alt-foot">
-          <button class="alt-like${likeMine(it.id, a.created_at) ? ' on' : ''}" onclick="likeAlt('${it.id}', '${esc(a.created_at)}')">👍 <span>${likeCount(it.id, a.created_at)}</span></button>
+          <button class="alt-like${likeMine(it.id, a.id) ? ' on' : ''}" onclick="likeAlt('${it.id}', '${a.id}')">👍 <span>${likeCount(it.id, a.id)}</span></button>
         </div>
       </div>`).join('');
     return `
@@ -531,20 +531,20 @@
   };
 
   // 다른 풀이 삭제 (로그인한 계정만 가능)
-  window.delAlt = async (id, idx) => {
+  window.delAlt = async (id, altId) => {
     const user = await currentUser();
     if (!user) return showError('로그인 후 삭제할 수 있습니다.');
-    const target = (ITEMS[id].alt_solutions || [])[idx];
+    const target = (ITEMS[id].alt_solutions || []).find(a => a.id === altId);
     if (!target || !canDeleteOwner(target.author_id)) return showError('본인이 작성한 풀이만 삭제할 수 있습니다.');
     if (!confirm('이 다른 풀이를 삭제할까요?')) return;
     const token = await currentToken();
-    const alts = (ITEMS[id].alt_solutions || []).filter((_, i) => i !== idx);
-    const patch = await fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${id}`, {
-      method: 'PATCH',
-      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ alt_solutions: alts })
+    // 서버(RLS)가 작성자 본인과 관리자만 삭제를 허용합니다.
+    const del = await fetch(`${SUPABASE_URL}/rest/v1/alt_solutions?id=eq.${altId}`, {
+      method: 'DELETE',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, Prefer: 'return=minimal' }
     });
-    if (!patch.ok) return showError('다른 풀이 삭제 실패');
+    if (!del.ok) return showError('다른 풀이 삭제 실패 (권한이 없거나 이미 삭제됨)');
+    const alts = (ITEMS[id].alt_solutions || []).filter(a => a.id !== altId);
     ITEMS[id].alt_solutions = alts;
     const old = $('sol-' + id);
     if (old) {
@@ -572,13 +572,14 @@
     });
     if (!up.ok) return showError('이미지 업로드 실패');
     const image_url = `${SUPABASE_URL}/storage/v1/object/public/solution-images/${path}`;
-    const alts = [...(ITEMS[id].alt_solutions || []), { title: `다른 풀이 ${(ITEMS[id].alt_solutions || []).length + 1}`, author: author.user_metadata?.name || '익명', author_id: author.id, text, image_url, created_at: new Date().toISOString() }];
-    const patch = await fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${id}`, {
-      method: 'PATCH',
-      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ alt_solutions: alts })
+    const ins = await fetch(`${SUPABASE_URL}/rest/v1/alt_solutions`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({ item_id: id, author_id: author.id, author_name: author.user_metadata?.name || '익명', text, image_url })
     });
-    if (!patch.ok) return showError('다른 풀이 저장 실패');
+    if (!ins.ok) return showError('다른 풀이 저장 실패');
+    const [row] = await ins.json();
+    const alts = [...(ITEMS[id].alt_solutions || []), row];
     ITEMS[id].alt_solutions = alts;
     // 목록 전체를 다시 그리지 않고, 이 문항의 풀이 블록만 갱신해서 화면 위치를 유지합니다.
     const old = $('sol-' + id);
@@ -719,7 +720,12 @@
       .like('id', 'EXAM-1G-%')
       .order('id');
     if (error) return showError(error.message);
-    data.forEach(it => { ITEMS[it.id] = it; });
+    data.forEach(it => { ITEMS[it.id] = it; it.alt_solutions = []; });
+    // 다른 풀이는 별도 테이블(alt_solutions)에서 읽어 해당 문항에 붙입니다.
+    const altRes = await db.from('alt_solutions')
+      .select('id, item_id, author_id, author_name, text, image_url, created_at')
+      .order('created_at');
+    (altRes.data || []).forEach(r => { if (ITEMS[r.item_id]) ITEMS[r.item_id].alt_solutions.push(r); });
     const sources = [...new Set(data.map(it => it.source))];
     $('sub').textContent = '시험을 골라 문항을 확인하세요.';
     // 시험 선택 버튼: 하나를 누르면 그 시험의 문항만 보입니다.
