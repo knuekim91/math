@@ -121,6 +121,7 @@
   .alt-like:hover { background: var(--main-light); }
   .alt-like.on { background: var(--main); border-color: var(--main); color: #fff; }
   .alt-title { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .alt-author { font-weight: normal; color: var(--main); }
   .alt-text { font-size: 14px; line-height: 1.6; margin-bottom: 6px; }
   .alt-img { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
   .alt-add { display: flex; gap: 8px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
@@ -421,7 +422,7 @@
     const alts = (it.alt_solutions || []).map((a, i) => `
       <div class="alt">
         <button class="alt-del" title="삭제" onclick="delAlt('${it.id}', ${i})">×</button>
-        <div class="alt-title">${esc(a.title || '다른 풀이')}</div>
+        <div class="alt-title">${esc(a.title || '다른 풀이')} <span class="alt-author">(${esc(a.author || '작성자 미기재')})</span></div>
         ${a.text ? `<div class="alt-text">${esc(a.text)}</div>` : ''}
         ${a.image_url ? `<img class="alt-img" src="${esc(a.image_url)}" alt="다른 풀이 캡쳐" />` : ''}
         <div class="alt-foot">
@@ -530,7 +531,8 @@
     const file = input.files[0];
     if (!file) return;
     const token = await currentToken();
-    if (!token) return showError('다른 풀이는 로그인 후 추가할 수 있습니다.');
+    const author = await currentUser();
+    if (!token || !author) return showError('다른 풀이는 로그인 후 추가할 수 있습니다.');
     const text = $('alt-text-' + id).value.trim();
     const path = `${id}/${Date.now()}_${file.name.replace(/[^\w.\-]/g, '_')}`;
     const up = await fetch(`${SUPABASE_URL}/storage/v1/object/solution-images/${path}`, {
@@ -540,7 +542,7 @@
     });
     if (!up.ok) return showError('이미지 업로드 실패');
     const image_url = `${SUPABASE_URL}/storage/v1/object/public/solution-images/${path}`;
-    const alts = [...(ITEMS[id].alt_solutions || []), { title: `다른 풀이 ${(ITEMS[id].alt_solutions || []).length + 1}`, text, image_url, created_at: new Date().toISOString() }];
+    const alts = [...(ITEMS[id].alt_solutions || []), { title: `다른 풀이 ${(ITEMS[id].alt_solutions || []).length + 1}`, author: author.email, text, image_url, created_at: new Date().toISOString() }];
     const patch = await fetch(`${SUPABASE_URL}/rest/v1/items?id=eq.${id}`, {
       method: 'PATCH',
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
