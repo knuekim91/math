@@ -192,9 +192,11 @@
   }
 
   function itemCard(it) {
-    const [y, m, n] = it.id.split('-');
-    const isPractice = it.id.startsWith('PR-');
-    const title = isPractice ? '연습 문제' : `${y}년 ${+m}월 · ${+n}번`;
+    const parts = it.id.split('-');
+    let title;
+    if (it.id.startsWith('PR-')) title = '연습 문제';
+    else if (it.id.startsWith('SIM-')) title = `${parts[1]}년 ${+parts[2]}월 ${+parts[3]}번 유사${parts[4]}`;
+    else title = `${parts[0]}년 ${+parts[1]}월 · ${+parts[2]}번`;
     const body = it.question_text
       ? `<div class="question">${esc(it.question_text)}</div>
          <div class="answer-row">
