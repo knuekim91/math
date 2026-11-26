@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MathWorld 선생님 업로드</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; background: #f5f7fb; margin: 0; color: #1f2937; }
+  header { background: #1f4e8c; color: #fff; padding: 16px 28px; font-weight: bold; }
+  main { max-width: 520px; margin: 28px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 22px; margin-bottom: 16px; }
+  label { display: block; font-size: 14px; margin: 10px 0 4px; }
+  input { width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; box-sizing: border-box; }
+  button { background: #1f4e8c; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 14px; cursor: pointer; margin-top: 12px; }
+  button:disabled { background: #9ca3af; }
+  .msg { font-size: 14px; margin-top: 10px; }
+  .ok { color: #065f46; } .ng { color: #b91c1c; }
+  .hidden { display: none; }
+  ul { padding-left: 18px; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>MathWorld 선생님 업로드</header>
+<main>
+  <div class="card" id="login-card">
+    <strong>선생님 로그인</strong>
+    <label>이메일</label>
+    <input id="email" type="email" />
+    <label>비밀번호</label>
+    <input id="password" type="password" />
+    <button id="login-btn">로그인</button>
+    <div class="msg ng" id="login-msg"></div>
+  </div>
+
+  <div class="card hidden" id="upload-card">
+    <strong>파일 올리기</strong>
+    <p style="font-size:13px;color:#6b7280">학교 수업 목적으로 사용할 파일만 올려 주세요. 올린 파일은 로그인한 선생님만 볼 수 있습니다.</p>
+    <input id="file" type="file" accept=".pdf,.png,.jpg,.jpeg" />
+    <button id="upload-btn">업로드</button>
+    <div class="msg" id="upload-msg"></div>
+    <button id="logout-btn" style="background:#6b7280">로그아웃</button>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const SUPABASE_URL = 'https://syalqcgnualsznjfgbhl.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_1UNLM-L5teNNXk0zBq0S_g_kVFSAvhm';
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const $ = (id) => document.getElementById(id);
+
+  async function refresh() {
+    const { data } = await db.auth.getSession();
+    const signedIn = !!data.session;
+    $('login-card').classList.toggle('hidden', signedIn);
+    $('upload-card').classList.toggle('hidden', !signedIn);
+  }
+
+  $('login-btn').onclick = async () => {
+    const { error } = await db.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value });
+    $('login-msg').textContent = error ? '로그인 실패: ' + error.message : '';
+    if (!error) { $('password').value = ''; refresh(); }
+  };
+
+  $('upload-btn').onclick = async () => {
+    const file = $('file').files[0];
+    if (!file) { $('upload-msg').className = 'msg ng'; $('upload-msg').textContent = '파일을 고르세요.'; return; }
+    const path = `${Date.now()}_${file.name.replace(/[^\w.\-]/g, '_')}`;
+    const { error } = await db.storage.from('teacher-files').upload(path, file);
+    $('upload-msg').className = 'msg ' + (error ? 'ng' : 'ok');
+    $('upload-msg').textContent = error ? '업로드 실패: ' + error.message : '업로드 완료: ' + path;
+  };
+
+  $('logout-btn').onclick = async () => { await db.auth.signOut(); refresh(); };
+
+  refresh();
+</script>
+</body>
+</html>
