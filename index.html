@@ -133,6 +133,10 @@
   figure.problem img { display: block; width: 100%; height: auto; }
   figure.problem figcaption { font-size: 12px; color: var(--muted); margin-top: 6px; text-align: right; }
   .exam-card .card-head { flex-wrap: wrap; }
+  .exam-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 6px; }
+  .exam-chip { background: #fff; color: var(--main); border: 1px solid var(--main); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: bold; cursor: pointer; }
+  .exam-chip:hover { background: var(--main-light); }
+  .exam-chip.on { background: var(--main); color: #fff; }
   .my-ans { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
   .pick-row { display: flex; gap: 6px; }
   .pick { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 4px 10px; font-size: 15px; cursor: pointer; }
@@ -581,12 +585,22 @@
     if (error) return showError(error.message);
     data.forEach(it => { ITEMS[it.id] = it; });
     const sources = [...new Set(data.map(it => it.source))];
-    $('sub').textContent = sources.join(' · ');
-    $('items').innerHTML = sources.map(src => `
-      <h3 class="exam-month">${esc(src)}</h3>
-      <div class="exam-grid">${data.filter(it => it.source === src).map(examCard).join('')}</div>`).join('');
-    data.forEach(it => loadRating(it.id));
-    loadMyAnswers();
+    $('sub').textContent = '시험을 골라 문항을 확인하세요.';
+    // 시험 선택 버튼: 하나를 누르면 그 시험의 문항만 보입니다.
+    const chips = [{ key: '', label: '전체' }, ...sources.map(s => ({ key: s, label: s }))];
+    const render = (key) => {
+      document.querySelectorAll('.exam-chip').forEach(b => b.classList.toggle('on', b.dataset.key === key));
+      const shown = key ? sources.filter(s => s === key) : sources;
+      $('items').innerHTML = shown.map(src => `
+        <h3 class="exam-month">${esc(src)}</h3>
+        <div class="exam-grid">${data.filter(it => it.source === src).map(examCard).join('')}</div>`).join('');
+      data.forEach(it => loadRating(it.id));
+      loadMyAnswers();
+    };
+    $('items').innerHTML = `<div class="exam-chips">${chips.map(c =>
+      `<button class="exam-chip" data-key="${esc(c.key)}">${esc(c.label)}</button>`).join('')}</div><div id="examBody"></div>`;
+    document.querySelectorAll('.exam-chip').forEach(b => b.onclick = () => render(b.dataset.key));
+    render('');
   }
 
   function examCard(it) {
