@@ -455,8 +455,16 @@
     });
     if (!patch.ok) return showError('다른 풀이 저장 실패');
     ITEMS[id].alt_solutions = alts;
-    if ($('side').classList.contains('view-exam')) showExam('고1');
-    else loadItems(currentConcept);
+    // 목록 전체를 다시 그리지 않고, 이 문항의 풀이 블록만 갱신해서 화면 위치를 유지합니다.
+    const old = $('sol-' + id);
+    if (old) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = solutionBlock(ITEMS[id]);
+      const fresh = tmp.firstElementChild;
+      fresh.hidden = false;
+      old.replaceWith(fresh);
+    }
+    input.value = '';
   };
 
   function itemCard(it) {
@@ -698,6 +706,8 @@
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` }
     }).then(r => r.json()).catch(() => []);
     if (!Array.isArray(rows)) return;
+    // 다시 불러올 때 이전 기록에 덧붙지 않도록 먼저 비웁니다.
+    Object.keys(HISTORY).forEach(k => delete HISTORY[k]);
     rows.forEach(r => (HISTORY[r.item_id] ||= []).push(r));
     Object.keys(HISTORY).forEach(id => showHistory(id));
   }
