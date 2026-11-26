@@ -21,7 +21,11 @@
   .layout { display: flex; min-height: calc(100vh - 70px); }
 
   nav { width: 280px; background: #fff; border-right: 1px solid var(--line); overflow-y: auto; padding: 16px 0; max-height: calc(100vh - 70px); position: sticky; top: 0; }
-  .unit-title { font-size: 13px; font-weight: bold; color: var(--main); padding: 12px 20px 6px; }
+  .unit-btn { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: none; padding: 12px 20px; font-size: 14px; font-weight: bold; color: var(--main); cursor: pointer; text-align: left; }
+  .unit-btn:hover, .unit-btn.open { background: var(--main-light); }
+  .unit-body { display: none; padding-bottom: 6px; }
+  .unit-body.open { display: block; }
+  .sub-title { font-size: 12px; color: var(--muted); padding: 8px 20px 2px 24px; }
   .concept-btn { display: block; width: 100%; text-align: left; background: none; border: none; padding: 9px 20px 9px 32px; font-size: 14px; color: var(--text); cursor: pointer; border-left: 3px solid transparent; }
   .concept-btn:hover { background: var(--main-light); }
   .concept-btn.active { background: var(--main-light); border-left-color: var(--accent); font-weight: bold; color: var(--main); }
@@ -110,21 +114,41 @@
     });
 
     let html = '';
-    for (const unit of Object.keys(groups)) {
-      html += `<div class="unit-title">${esc(unit)}</div>`;
-      for (const sub of Object.keys(groups[unit])) {
-        html += `<div class="muted" style="padding:4px 20px 2px 24px;font-size:12px">${esc(sub)}</div>`;
+    Object.keys(groups).forEach((unit, idx) => {
+      const subs = Object.keys(groups[unit]);
+      html += `<div class="unit-group">
+        <button class="unit-btn" data-unit="${idx}">${esc(unit)}<span class="arrow">▸</span></button>
+        <div class="unit-body" data-body="${idx}">`;
+      subs.forEach(sub => {
+        html += `<div class="sub-title">${esc(sub)}</div>`;
         groups[unit][sub].forEach(c => {
           html += `<button class="concept-btn" data-id="${c.id}" data-name="${esc(c.name)}" data-sub="${esc(sub)}">${esc(c.name)}</button>`;
         });
-      }
-    }
+      });
+      html += '</div></div>';
+    });
     $('nav').innerHTML = html;
+
+    $('nav').querySelectorAll('.unit-btn').forEach(btn => {
+      btn.onclick = () => toggleUnit(btn.dataset.unit);
+    });
     $('nav').querySelectorAll('.concept-btn').forEach(btn => {
       btn.onclick = () => selectConcept(btn);
     });
+    toggleUnit('0');
     const first = $('nav').querySelector('.concept-btn');
     if (first) selectConcept(first);
+  }
+
+  function toggleUnit(idx) {
+    $('nav').querySelectorAll('.unit-group').forEach(g => {
+      const btn = g.querySelector('.unit-btn');
+      const body = g.querySelector('.unit-body');
+      const open = btn.dataset.unit === String(idx) && !body.classList.contains('open');
+      body.classList.toggle('open', open);
+      btn.classList.toggle('open', open);
+      btn.querySelector('.arrow').textContent = open ? '▾' : '▸';
+    });
   }
 
   function selectConcept(btn) {
