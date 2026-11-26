@@ -102,6 +102,7 @@
   .auth input { padding: 5px 8px; border-radius: 6px; border: none; font-size: 12px; width: 180px; }
   .auth-btn { background: #fff; color: var(--main); border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: bold; cursor: pointer; }
   .auth-user, .auth-msg { color: #fff; opacity: 0.9; }
+  .auth label.keep { color: #fff; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 
   /* 문항 기능: 별점 · 버튼 · 정답/풀이 블록 */
   [hidden] { display: none !important; }
@@ -391,23 +392,54 @@
     applyDeleteVisibility();
     $('authBox').innerHTML = user
       ? `<span class="auth-user">${esc(user.user_metadata?.name || user.email)}</span><input id="authName" placeholder="표시 이름" value="${esc(user.user_metadata?.name || '')}" /><button class="auth-btn" onclick="saveName()">이름 저장</button><button class="auth-btn" onclick="logout()">로그아웃</button>`
-      : `<input id="authEmail" type="email" placeholder="이메일 주소" /><button class="auth-btn" onclick="sendLink()">로그인 링크 받기</button><span id="authMsg" class="auth-msg"></span>`;
+      : `<input id="authEmail" type="email" placeholder="이메일" />
+         <input id="authPw" type="password" placeholder="비밀번호 (6자 이상)" />
+         <label class="keep"><input type="checkbox" id="authKeep" checked /> 로그인 유지</label>
+         <button class="auth-btn" onclick="signIn()">로그인</button>
+         <button class="auth-btn" onclick="signUp()">회원가입</button>
+         <span id="authMsg" class="auth-msg"></span>`;
   }
-  window.sendLink = async () => {
+
+  // 이메일 + 비밀번호 로그인 / 회원가입
+  function authCreds() {
     const email = $('authEmail').value.trim();
-    if (!email) return;
-    const btn = document.querySelector('#authBox .auth-btn');
-    if (btn) btn.disabled = true;
-    const { error } = await db.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href.split('#')[0] } });
-    if (btn) setTimeout(() => { btn.disabled = false; }, 3000);
-    // 메시지는 한 줄만 보이도록 매번 덮어씁니다.
-    let text = '메일에서 로그인 링크를 눌러 주세요.';
-    if (error) {
-      text = /rate limit/i.test(error.message)
-        ? '메일 발송 횟수 제한에 걸렸습니다. 잠시 후 다시 시도해 주세요.'
-        : `로그인 메일 발송 실패: ${error.message}`;
+    const password = $('authPw').value;
+    if (!email || !password) { $('authMsg').textContent = '이메일과 비밀번호를 입력해 주세요.'; return null; }
+    return { email, password };
+  }
+  function authErrorText(error) {
+    const m = error.message || '';
+    if (/invalid login/i.test(m)) return '이메일 또는 비밀번호가 맞지 않습니다.';
+    if (/already registered/i.test(m)) return '이미 가입된 이메일입니다. 로그인해 주세요.';
+    if (/rate limit/i.test(m)) return '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.';
+    if (/password/i.test(m)) return '비밀번호는 6자 이상이어야 합니다.';
+    return `오류: ${m}`;
+  }
+  // 로그인 유지: 체크하면 브라우저를 닫아도 유지, 해제하면 브라우저를 닫을 때 로그아웃됩니다.
+  function rememberSession(keep) {
+    localStorage.setItem('keep_login', keep ? '1' : '0');
+    sessionStorage.setItem('alive', '1');
+  }
+  window.signIn = async () => {
+    const c = authCreds();
+    if (!c) return;
+    const { data, error } = await db.auth.signInWithPassword(c);
+    if (error) { $('authMsg').textContent = authErrorText(error); return; }
+    rememberSession($('authKeep').checked);
+    $('authMsg').textContent = '로그인되었습니다.';
+  };
+  window.signUp = async () => {
+    const c = authCreds();
+    if (!c) return;
+    const { data, error } = await db.auth.signUp(c);
+    if (error) { $('authMsg').textContent = authErrorText(error); return; }
+    if (data.session) {
+      rememberSession($('authKeep').checked);
+      $('authMsg').textContent = '회원가입이 완료되어 로그인되었습니다.';
+    } else {
+      // 이메일 확인이 켜져 있으면 세션이 바로 생기지 않습니다.
+      $('authMsg').textContent = '가입 확인 메일을 보냈습니다. 메일의 링크를 누른 뒤 로그인해 주세요.';
     }
-    $('authMsg').textContent = text;
   };
   window.logout = async () => { await db.auth.signOut(); renderAuth(null); };
   // 표시 이름 저장: 다른 풀이 작성자 이름으로 쓰입니다.
@@ -844,6 +876,11 @@
     Object.keys(HISTORY).forEach(k => delete HISTORY[k]);
     rows.forEach(r => (HISTORY[r.item_id] ||= []).push(r));
     Object.keys(HISTORY).forEach(id => showHistory(id));
+  }
+
+  // 로그인 유지 해제 상태라면, 브라우저를 닫고 다시 연 경우 자동 로그아웃합니다.
+  if (localStorage.getItem('keep_login') === '0' && !sessionStorage.getItem('alive')) {
+    db.auth.signOut();
   }
 
   loadConcepts();
