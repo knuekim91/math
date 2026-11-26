@@ -199,7 +199,7 @@
     const parts = it.id.split('-');
     let title;
     if (it.id.startsWith('PR-')) title = '연습 문제';
-    else if (it.id.startsWith('SIM-')) title = `${parts[1]}년 ${+parts[2]}월 ${+parts[3]}번 유사${parts[4]}`;
+    else if (it.id.startsWith('SIM-')) title = `${parts[1]}년 ${+parts[2]}월 ${+parts[3]}번 유사${parts[4] || 1}`;
     else title = `${parts[0]}년 ${+parts[1]}월 · ${+parts[2]}번`;
     const answerBox = it.choices
       ? `<div class="choices">${it.choices.map((c, i) => `
