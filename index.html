@@ -133,6 +133,14 @@
   figure.problem img { display: block; width: 100%; height: auto; }
   figure.problem figcaption { font-size: 12px; color: var(--muted); margin-top: 6px; text-align: right; }
   .exam-card .card-head { flex-wrap: wrap; }
+  .my-ans { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .pick-row { display: flex; gap: 6px; }
+  .pick { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 4px 10px; font-size: 15px; cursor: pointer; }
+  .pick.on { background: var(--main); color: #fff; border-color: var(--main); }
+  .short-in { width: 120px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+  .ans-res { font-size: 14px; }
+  .ok-t { color: #059669; }
+  .ng-t { color: #dc2626; }
   .exam-img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 
   @media (max-width: 760px) {
@@ -570,6 +578,7 @@
       <h3 class="exam-month">${esc(src)}</h3>
       <div class="exam-grid">${data.filter(it => it.source === src).map(examCard).join('')}</div>`).join('');
     data.forEach(it => loadRating(it.id));
+    loadMyAnswers();
   }
 
   function examCard(it) {
@@ -593,8 +602,81 @@
         </div>
         ${answerBlock}
         ${solutionBlock(it)}
+        ${answerForm(it)}
         ${starRow(it.id)}
       </div>`;
+  }
+
+  // 학생 답 제출: 1~21번은 ①~⑤ 선택, 22~30번은 직접 입력
+  const PENDING = {};
+  function answerForm(it) {
+    const inner = it.number <= 21
+      ? `<div class="pick-row">${[1, 2, 3, 4, 5].map(v =>
+          `<button class="pick" data-id="${it.id}" data-v="${v}" onclick="pickAns(this)">${'①②③④⑤'[v - 1]}</button>`).join('')}</div>`
+      : `<input class="short-in" id="ansin-${it.id}" placeholder="답 입력" />`;
+    return `
+      <div class="my-ans">
+        <span class="rate-label">내 답</span>${inner}
+        <button class="ghost" onclick="submitAns('${it.id}')">제출</button>
+        <span class="ans-res" id="res-${it.id}"></span>
+      </div>`;
+  }
+
+  window.pickAns = (btn) => {
+    const id = btn.dataset.id;
+    PENDING[id] = btn.dataset.v;
+    btn.parentElement.querySelectorAll('.pick').forEach(b => b.classList.toggle('on', b === btn));
+  };
+
+  // 제출 이력(회차별)을 "1회 틀림 · 2회 틀림 · 3회 맞음" 형식으로 표시합니다.
+  const HISTORY = {};
+  function showHistory(id) {
+    const el = $('res-' + id);
+    if (!el) return;
+    const rows = HISTORY[id] || [];
+    if (!rows.length) { el.innerHTML = ''; return; }
+    const registered = ITEMS[id] && ITEMS[id].answer !== null && ITEMS[id].answer !== '';
+    const last = rows[rows.length - 1];
+    const trail = rows.map(r => {
+      if (!registered) return `${r.attempt_no}회 제출`;
+      return `${r.attempt_no}회 ${r.is_correct ? '<strong class="ok-t">맞음</strong>' : '<strong class="ng-t">틀림</strong>'}`;
+    }).join(' · ');
+    el.innerHTML = `최근 답 ${esc(last.answer)}<br><span class="muted">${trail}</span>${registered ? '' : ' <span class="muted">(정답 미등록)</span>'}`;
+  }
+
+  window.submitAns = async (id) => {
+    const input = $('ansin-' + id);
+    const val = String(PENDING[id] ?? (input ? input.value : '')).trim();
+    if (!val) return;
+    const user = await currentUser();
+    if (!user) return showError('답 제출은 로그인 후 가능합니다.');
+    const token = await currentToken();
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/student_attempts`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({ user_id: user.id, item_id: id, answer: val })
+    });
+    if (!res.ok) return showError('답 저장 실패');
+    const [row] = await res.json();
+    (HISTORY[id] ||= []).push(row);
+    showHistory(id);
+    if (input) input.value = '';
+    delete PENDING[id];
+    document.querySelectorAll(`.pick[data-id="${id}"]`).forEach(b => b.classList.remove('on'));
+  };
+
+  // 로그인한 계정의 이전 답안 기록을 불러와 표시합니다.
+  async function loadMyAnswers() {
+    const user = await currentUser();
+    if (!user) return;
+    const token = await currentToken();
+    const rows = await fetch(`${SUPABASE_URL}/rest/v1/student_attempts?select=item_id,attempt_no,answer,is_correct&user_id=eq.${user.id}&order=attempt_no.asc`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` }
+    }).then(r => r.json()).catch(() => []);
+    if (!Array.isArray(rows)) return;
+    rows.forEach(r => (HISTORY[r.item_id] ||= []).push(r));
+    Object.keys(HISTORY).forEach(id => showHistory(id));
   }
 
   loadConcepts();
