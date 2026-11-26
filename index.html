@@ -103,6 +103,16 @@
   .auth-btn { background: #fff; color: var(--main); border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: bold; cursor: pointer; }
   .auth-user, .auth-msg { color: #fff; opacity: 0.9; }
   .auth label.keep { color: #fff; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+  .modal[hidden] { display: none; }
+  .modal-box { position: relative; background: #fff; color: var(--text); border-radius: 14px; padding: 26px 24px 22px; width: 100%; max-width: 360px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 10px; }
+  .modal-box h3 { margin: 0 0 4px; font-size: 19px; color: var(--main); }
+  .modal-box input[type=email], .modal-box input[type=password] { width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; }
+  .modal-box label.keep { color: var(--text); font-size: 14px; }
+  .modal-submit { background: var(--main); color: #fff; border: none; border-radius: 8px; padding: 12px; font-size: 15px; font-weight: bold; cursor: pointer; }
+  .modal-submit:hover { background: #173b6b; }
+  .modal-x { position: absolute; top: 8px; right: 10px; background: none; border: none; font-size: 24px; color: var(--muted); cursor: pointer; }
+  .modal-box .auth-msg { color: #b91c1c; font-size: 13px; min-height: 16px; opacity: 1; }
 
   /* 문항 기능: 별점 · 버튼 · 정답/풀이 블록 */
   [hidden] { display: none !important; }
@@ -229,6 +239,17 @@
   </main>
 </div>
 
+<div id="authModal" class="modal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true">
+    <button class="modal-x" onclick="closeAuth()" aria-label="닫기">×</button>
+    <h3 id="authTitle"></h3>
+    <input id="authEmail" type="email" placeholder="이메일" />
+    <input id="authPw" type="password" placeholder="비밀번호 (6자 이상)" />
+    <label class="keep"><input type="checkbox" id="authKeep" checked /> 로그인 유지</label>
+    <button id="authSubmit" class="modal-submit" onclick="submitAuth()"></button>
+    <span id="authMsg" class="auth-msg"></span>
+  </div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
   const SUPABASE_URL = 'https://utqvqickqqosvzgfxisv.supabase.co';
@@ -408,12 +429,8 @@
     applyDeleteVisibility();
     $('authBox').innerHTML = user
       ? `<span class="auth-user">${esc(user.user_metadata?.name || user.email)}</span><input id="authName" placeholder="표시 이름" value="${esc(user.user_metadata?.name || '')}" /><button class="auth-btn" onclick="saveName()">이름 저장</button><button class="auth-btn" onclick="logout()">로그아웃</button>`
-      : `<input id="authEmail" type="email" placeholder="이메일" />
-         <input id="authPw" type="password" placeholder="비밀번호 (6자 이상)" />
-         <label class="keep"><input type="checkbox" id="authKeep" checked /> 로그인 유지</label>
-         <button class="auth-btn" onclick="signIn()">로그인</button>
-         <button class="auth-btn" onclick="signUp()">회원가입</button>
-         <span id="authMsg" class="auth-msg"></span>`;
+      : `<button class="auth-btn" onclick="openAuth('login')">로그인</button>
+         <button class="auth-btn" onclick="openAuth('signup')">회원가입</button>`;
   }
 
   // 이메일 + 비밀번호 로그인 / 회원가입
@@ -431,6 +448,25 @@
     if (/password/i.test(m)) return '비밀번호는 6자 이상이어야 합니다.';
     return `오류: ${m}`;
   }
+  // 팝업(모달)으로 로그인 / 회원가입
+  let authMode = 'login';
+  window.openAuth = (mode) => {
+    authMode = mode;
+    $('authTitle').textContent = mode === 'login' ? '로그인' : '회원가입';
+    $('authSubmit').textContent = mode === 'login' ? '로그인' : '회원가입';
+    $('authMsg').textContent = '';
+    $('authModal').hidden = false;
+    $('authEmail').focus();
+  };
+  window.closeAuth = () => {
+    $('authModal').hidden = true;
+    $('authPw').value = '';
+  };
+  window.submitAuth = () => (authMode === 'login' ? signIn() : signUp());
+  document.getElementById('authModal').addEventListener('click', (e) => {
+    if (e.target.id === 'authModal') closeAuth();
+  });
+
   // 로그인 유지: 체크하면 브라우저를 닫아도 유지, 해제하면 브라우저를 닫을 때 로그아웃됩니다.
   function rememberSession(keep) {
     localStorage.setItem('keep_login', keep ? '1' : '0');
@@ -443,6 +479,7 @@
     if (error) { $('authMsg').textContent = authErrorText(error); return; }
     rememberSession($('authKeep').checked);
     $('authMsg').textContent = '로그인되었습니다.';
+    setTimeout(closeAuth, 700);
   };
   window.signUp = async () => {
     const c = authCreds();
@@ -452,6 +489,7 @@
     if (data.session) {
       rememberSession($('authKeep').checked);
       $('authMsg').textContent = '회원가입이 완료되어 로그인되었습니다.';
+      setTimeout(closeAuth, 700);
     } else {
       // 이메일 확인이 켜져 있으면 세션이 바로 생기지 않습니다.
       $('authMsg').textContent = '가입 확인 메일을 보냈습니다. 메일의 링크를 누른 뒤 로그인해 주세요.';
