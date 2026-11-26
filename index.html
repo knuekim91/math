@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MathWorld 문항 추천</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; margin: 0; background: #f6f7fb; color: #222; }
+  header { background: #2c5282; color: #fff; padding: 14px 20px; font-size: 18px; font-weight: bold; }
+  main { max-width: 760px; margin: 20px auto; padding: 0 16px; }
+  select, button { font-size: 15px; padding: 8px 12px; margin: 4px 0; }
+  .card { background: #fff; border-radius: 10px; padding: 16px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 10px; background: #e2e8f0; margin-right: 6px; }
+  .상 { background: #fed7d7; } .중 { background: #feebc8; } .하 { background: #c6f6d5; }
+  .rec { border-left: 4px solid #3182ce; }
+  .muted { color: #718096; font-size: 13px; }
+  .card { position: relative; }
+  .wrong-btn { position: absolute; top: 10px; right: 10px; border-radius: 6px; border: 1.5px solid #e53e3e; background: #fff5f5; color: #c53030; cursor: pointer; padding: 1px 6px; font-size: 12px; font-weight: bold; line-height: 1.3; }
+  .wrong-btn:hover { background: #fed7d7; }
+  #error { color: #c53030; }
+</style>
+</head>
+<body>
+<header>MathWorld 문항 추천</header>
+<main>
+  <div class="card">
+    <label>개념 선택
+      <select id="concept"></select>
+    </label>
+    <div class="muted">과목: 공통수학1 · 교과 개념 중심</div>
+  </div>
+  <div id="error"></div>
+  <div id="items"></div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // 아래 두 값을 Supabase 프로젝트 설정(Project Settings > API)에서 복사해 넣으세요.
+  const SUPABASE_URL = 'https://syalqcgnualsznjfgbhl.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_1UNLM-L5teNNXk0zBq0S_g_kVFSAvhm';
+
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const $ = (id) => document.getElementById(id);
+
+  async function loadConcepts() {
+    const { data, error } = await db.from('concepts')
+      .select('id, unit, sub_unit, name, kind')
+      .eq('kind', '교과')
+      .order('id');
+    if (error) return showError(error.message);
+    const sel = $('concept');
+    sel.innerHTML = data.map(c => `<option value="${c.id}">${c.sub_unit} · ${c.name}</option>`).join('');
+    sel.onchange = () => loadItems(Number(sel.value));
+    if (data.length) loadItems(data[0].id);
+  }
+
+  async function loadItems(conceptId) {
+    const { data, error } = await db.from('items')
+      .select('id, difficulty, question_text, answer, solution_steps')
+      .eq('concept_id', conceptId)
+      .order('difficulty');
+    if (error) return showError(error.message);
+    $('items').innerHTML = data.length
+      ? data.map(itemCard).join('')
+      : '<div class="card muted">이 개념에 연결된 문항이 아직 없습니다.</div>';
+  }
+
+  function itemCard(it) {
+    const [y, m, n] = it.id.split('-');
+    const title = it.id.startsWith('PR-') ? '연습 문제' : `${y}년 ${+m}월 · ${+n}번`;
+    const body = it.question_text
+      ? `<p>${it.question_text}</p>
+         <input id="ans-${it.id}" placeholder="답을 입력하세요" />
+         <button onclick="check('${it.id}')">확인</button>
+         <div id="res-${it.id}"></div>`
+      : '<div class="muted">기출 문제는 본문을 공개하지 않습니다. 아래 버튼으로 추천 문항을 확인하세요.</div>';
+    return `
+      <div class="card">
+        <span class="tag ${it.difficulty || ''}">${it.difficulty || '난이도 미정'}</span>
+        <strong>${title}</strong>
+        ${body}
+        <button class="wrong-btn" onclick="wrong('${it.id}')">틀림</button>
+        <div id="rec-${it.id}"></div>
+      </div>`;
+  }
+
+  window.check = (itemId) => {
+    const input = document.getElementById('ans-' + itemId).value.trim();
+    const res = document.getElementById('res-' + itemId);
+    const card = res.closest('.card');
+    fetch(`${SUPABASE_URL}/rest/v1/items?select=answer,solution_steps&id=eq.${itemId}`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    }).then(r => r.json()).then(([row]) => {
+      const ok = input === String(row.answer).trim();
+      const steps = (row.solution_steps || []).join('<br>');
+      res.innerHTML = ok
+        ? '<div class="card" style="background:#c6f6d5">정답입니다.</div>'
+        : `<div class="card" style="background:#fed7d7">틀렸습니다. 풀이: ${steps}</div>`;
+    });
+  };
+
+  // 오답 시 같은 개념의 연계(하·중) 문항과 유사 문항을 보여 줍니다.
+  window.wrong = async (itemId) => {
+    const { data, error } = await db.from('item_relations')
+      .select('relation_type, to_item_id, items!item_relations_to_item_id_fkey(difficulty)')
+      .eq('from_item_id', itemId)
+      .in('relation_type', ['연계', '유사']);
+    if (error) return showError(error.message);
+    const box = $('rec-' + itemId);
+    if (!data.length) { box.innerHTML = '<div class="muted">추천 문항이 없습니다.</div>'; return; }
+    box.innerHTML = data.map(r => `
+      <div class="card rec">
+        <span class="tag">${r.relation_type}</span>
+        <strong>${r.to_item_id}</strong>
+        <span class="tag ${r.items?.difficulty || ''}">${r.items?.difficulty || '미정'}</span>
+      </div>`).join('');
+  };
+
+  function showError(msg) { $('error').textContent = '오류: ' + msg; }
+
+  loadConcepts();
+</script>
+</body>
+</html>
