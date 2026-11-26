@@ -116,6 +116,10 @@
   .alt { position: relative; margin-top: 10px; padding: 10px 34px 10px 0; border-top: 1px dashed var(--line); }
   .alt-del { position: absolute; top: 10px; right: 0; width: 24px; height: 24px; border: 1px solid #fecaca; border-radius: 50%; background: #fff5f5; color: #dc2626; font-size: 16px; line-height: 1; cursor: pointer; padding: 0; }
   .alt-del:hover { background: #fee2e2; }
+  .alt-foot { margin-top: 8px; }
+  .alt-like { background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; padding: 3px 12px; font-size: 13px; cursor: pointer; color: var(--muted); }
+  .alt-like:hover { background: var(--main-light); }
+  .alt-like.on { background: var(--main); border-color: var(--main); color: #fff; }
   .alt-title { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
   .alt-text { font-size: 14px; line-height: 1.6; margin-bottom: 6px; }
   .alt-img { display: block; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
@@ -420,6 +424,9 @@
         <div class="alt-title">${esc(a.title || '다른 풀이')}</div>
         ${a.text ? `<div class="alt-text">${esc(a.text)}</div>` : ''}
         ${a.image_url ? `<img class="alt-img" src="${esc(a.image_url)}" alt="다른 풀이 캡쳐" />` : ''}
+        <div class="alt-foot">
+          <button class="alt-like${likeMine(it.id, a.created_at) ? ' on' : ''}" onclick="likeAlt('${it.id}', '${esc(a.created_at)}')">👍 <span>${likeCount(it.id, a.created_at)}</span></button>
+        </div>
       </div>`).join('');
     return `
       <div class="block" id="sol-${it.id}" hidden>
@@ -435,6 +442,65 @@
         </div>
       </div>`;
   }
+
+  // 다른 풀이 좋아요: 개수는 모두에게 보이고, 로그인한 사람은 한 번 누르면 추가, 다시 누르면 취소됩니다.
+  const LIKE_COUNT = {};   // "itemId|altKey" -> 개수
+  const LIKE_MINE = {};    // "itemId|altKey" -> true (내가 누른 것)
+  const likeKey = (id, key) => `${id}|${key}`;
+  const likeCount = (id, key) => LIKE_COUNT[likeKey(id, key)] || 0;
+  const likeMine = (id, key) => !!LIKE_MINE[likeKey(id, key)];
+
+  function refreshLikeButtons() {
+    document.querySelectorAll('.alt-like').forEach(btn => {
+      const m = btn.getAttribute('onclick').match(/likeAlt\('([^']+)', '([^']+)'\)/);
+      if (!m) return;
+      const k = likeKey(m[1], m[2]);
+      btn.classList.toggle('on', !!LIKE_MINE[k]);
+      btn.querySelector('span').textContent = LIKE_COUNT[k] || 0;
+    });
+  }
+
+  async function loadLikes() {
+    const summary = await fetch(`${SUPABASE_URL}/rest/v1/alt_like_summary?select=item_id,alt_key,like_count`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    }).then(r => r.json()).catch(() => []);
+    Object.keys(LIKE_COUNT).forEach(k => delete LIKE_COUNT[k]);
+    if (Array.isArray(summary)) summary.forEach(r => { LIKE_COUNT[likeKey(r.item_id, r.alt_key)] = r.like_count; });
+
+    Object.keys(LIKE_MINE).forEach(k => delete LIKE_MINE[k]);
+    const user = await currentUser();
+    if (user) {
+      const token = await currentToken();
+      const mine = await fetch(`${SUPABASE_URL}/rest/v1/alt_likes?select=item_id,alt_key&user_id=eq.${user.id}`, {
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` }
+      }).then(r => r.json()).catch(() => []);
+      if (Array.isArray(mine)) mine.forEach(r => { LIKE_MINE[likeKey(r.item_id, r.alt_key)] = true; });
+    }
+    refreshLikeButtons();
+  }
+
+  window.likeAlt = async (id, key) => {
+    const user = await currentUser();
+    if (!user) return showError('좋아요는 로그인 후 누를 수 있습니다.');
+    const token = await currentToken();
+    const k = likeKey(id, key);
+    const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+    if (LIKE_MINE[k]) {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/alt_likes?item_id=eq.${encodeURIComponent(id)}&alt_key=eq.${encodeURIComponent(key)}&user_id=eq.${user.id}`, { method: 'DELETE', headers });
+      if (!res.ok) return showError('좋아요 취소 실패');
+      delete LIKE_MINE[k];
+      LIKE_COUNT[k] = Math.max(0, (LIKE_COUNT[k] || 1) - 1);
+    } else {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/alt_likes`, {
+        method: 'POST', headers: { ...headers, Prefer: 'return=minimal' },
+        body: JSON.stringify({ user_id: user.id, item_id: id, alt_key: key })
+      });
+      if (!res.ok) return showError('좋아요 저장 실패');
+      LIKE_MINE[k] = true;
+      LIKE_COUNT[k] = (LIKE_COUNT[k] || 0) + 1;
+    }
+    refreshLikeButtons();
+  };
 
   // 다른 풀이 삭제 (로그인한 계정만 가능)
   window.delAlt = async (id, idx) => {
@@ -633,6 +699,7 @@
         <div class="exam-grid">${data.filter(it => it.source === src).map(examCard).join('')}</div>`).join('');
       data.forEach(it => loadRating(it.id));
       loadMyAnswers();
+      loadLikes();
     };
     $('items').innerHTML = `<div class="exam-chips">${chips.map(c =>
       `<button class="exam-chip" data-key="${esc(c.key)}">${esc(c.label)}</button>`).join('')}</div><div id="examBody"></div>`;
