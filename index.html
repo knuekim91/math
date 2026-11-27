@@ -156,6 +156,13 @@
   .rate-badge:empty { display: none; }
   .timer { font-size: 15px; font-weight: bold; color: var(--main); margin-bottom: 8px; }
   .timer.warn { color: #dc2626; }
+  .signal { display: inline-flex; align-items: center; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: bold; animation: sigPop 0.35s ease-out; }
+  .signal:empty { display: none; }
+  .sig-ok { background: #059669; color: #fff; }
+  .sig-ng { background: #dc2626; color: #fff; }
+  .sig-late { background: #ea580c; color: #fff; }
+  .sig-none { background: #e5e7eb; color: #374151; }
+  @keyframes sigPop { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
   button.ghost:disabled { opacity: 0.45; cursor: not-allowed; }
   .exam-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 6px; }
   .exam-chip { background: #fff; color: var(--main); border: 1px solid var(--main); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: bold; cursor: pointer; }
@@ -953,6 +960,7 @@
         ${answerForm(it)}
         <div class="actions">
           <button class="ghost" id="start-${it.id}" onclick="startExam('${it.id}')">응시</button>
+          <span class="signal" id="sig-${it.id}"></span>
           <button class="ghost" onclick="toggleBlock('${it.id}', 'ansb')">정답 보기</button>
           <button class="ghost" onclick="toggleBlock('${it.id}', 'sol')">풀이 · 다른 풀이</button>
         </div>
@@ -975,6 +983,23 @@
         <div class="pick-row">${inner}<button class="pick submit-btn" onclick="submitAns('${it.id}')">제출</button></div>
         <div class="ans-res" id="res-${it.id}"></div>
       </div>`;
+  }
+
+  // 제출 결과 신호: 맞으면 초록 ○, 틀리면 빨간 ×, 시간 초과는 주황색으로 카드 위에 바로 표시합니다.
+  function showSignal(id, row) {
+    const el = $('sig-' + id);
+    if (!el) return;
+    const registered = ITEMS[id] && ITEMS[id].answer !== null && ITEMS[id].answer !== '';
+    let cls, text;
+    if (row.timed_out) { cls = 'sig-late'; text = '⏰ 시간 초과'; }
+    else if (!registered) { cls = 'sig-none'; text = '제출 완료 (정답 미등록)'; }
+    else if (row.is_correct) { cls = 'sig-ok'; text = '○ 정답!'; }
+    else { cls = 'sig-ng'; text = '× 오답'; }
+    el.className = `signal ${cls}`;
+    el.textContent = `${text} · ${row.attempt_no}회`;
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = '';
   }
 
   // 응시 타이머: 배점별 제한 시간 (2점 30초, 3점 2분 30초, 4점 4분)
@@ -1028,6 +1053,7 @@
     const [row] = await res.json();
     (HISTORY[id] ||= []).push(row);
     showHistory(id);
+    showSignal(id, row);
     $('ans-' + id).hidden = true;
     const input = $('ansin-' + id);
     if (input) input.value = '';
