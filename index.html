@@ -30,7 +30,20 @@
   .side-btn { background: #fff; border: 1px solid #cbd5e1; border-radius: 999px; padding: 5px 10px; font-size: 13px; font-weight: bold; color: var(--main); cursor: pointer; white-space: nowrap; }
   .side-btn:hover { background: var(--main-light); }
   .side-btn.active { background: var(--main-light); border-left: 3px solid var(--accent); }
-  #examPanel { display: none; padding: 16px 14px; font-size: 13px; color: var(--muted); }
+  #examPanel { display: none; padding: 10px 14px 16px; font-size: 13px; color: var(--muted); overflow-y: auto; }
+  .qnav-title { font-weight: bold; color: var(--main); margin: 10px 0 6px; font-size: 13px; }
+  .qnav-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+  .qnav-btn { background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 0; font-size: 13px; font-weight: bold; color: var(--main); cursor: pointer; }
+  .qnav-btn:hover { background: var(--main-light); }
+  .qnav-btn.on { background: var(--main); color: #fff; border-color: var(--main); }
+  /* 휴대폰 '문제 선택' 버튼과 아래에서 올라오는 번호 판 (PC에서는 숨김) */
+  #qFab { display: none; position: fixed; right: 16px; bottom: 20px; z-index: 900; background: var(--main); color: #fff; border: none; border-radius: 999px; padding: 12px 18px; font-size: 14px; font-weight: bold; box-shadow: 0 4px 14px rgba(0,0,0,0.25); cursor: pointer; }
+  #qSheetBg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 949; }
+  #qSheetBg.open { display: block; }
+  #qSheet { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 950; background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 16px rgba(0,0,0,0.2); padding: 14px 16px 18px; overflow-y: auto; }
+  #qSheet.open { display: block; }
+  #qSheet .qsheet-head { display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: var(--main); margin-bottom: 4px; }
+  #qSheet .qsheet-close { background: none; border: none; font-size: 15px; cursor: pointer; color: var(--muted); }
   #side.view-exam #examPanel { display: block; }
   #side.view-exam #nav { display: none !important; }
   #navTab { writing-mode: vertical-rl; width: 40px; flex-shrink: 0; background: var(--main); color: #fff; border: none; cursor: pointer; font-size: 13px; font-weight: bold; letter-spacing: 4px; padding: 16px 0; }
@@ -188,6 +201,11 @@
     #navTab { writing-mode: horizontal-tb; width: 100%; height: 36px; padding: 0 16px; letter-spacing: 1px; text-align: left; }
     #sidePanel { height: auto; }
     #nav { max-height: 260px; }
+    #side.view-exam #examPanel { display: none; }
+    .qnav-grid { grid-template-columns: repeat(10, 1fr); }
+    #qFab { display: block; }
+    #qSheet { max-height: 60vh; }
+    #qSheet .qnav-grid { grid-template-columns: repeat(8, 1fr); }
     main { padding: 16px; }
   }
 
@@ -221,6 +239,13 @@
   </div>
   <div id="authBox" class="auth"></div>
 </header>
+
+<button id="qFab" hidden>문제 선택</button>
+<div id="qSheetBg"></div>
+<div id="qSheet" role="dialog" aria-label="문제 선택">
+  <div class="qsheet-head"><span>문제 선택</span><button class="qsheet-close" id="qSheetClose">닫기 ×</button></div>
+  <div id="qSheetBody"></div>
+</div>
 
 <div class="layout">
   <aside id="side">
@@ -885,6 +910,8 @@
       const side = $('side');
       side.classList.remove('view-exam');
       side.classList.add('view-concept');
+      $('qFab').hidden = true;
+      closeQSheet();
       $('items').innerHTML = '';
       showSubject(btn.dataset.subject);
     };
@@ -906,6 +933,9 @@
     if (grade !== '고1') {
       $('sub').textContent = '';
       $('items').innerHTML = '<div class="empty">준비 중입니다.</div>';
+      $('examPanel').textContent = '전국연합 기출 문항은 준비 중입니다.';
+      $('qFab').hidden = true;
+      closeQSheet();
       return;
     }
     $('items').innerHTML = '<div class="muted">불러오는 중…</div>';
@@ -930,6 +960,14 @@
       $('examBody').innerHTML = shown.map(src => `
         <h3 class="exam-month">${esc(src)}</h3>
         <div class="exam-grid">${data.filter(it => it.source === src).map(examCard).join('')}</div>`).join('');
+      // 왼쪽 메뉴: 시험별 문항 번호(1~30) 버튼. 누르면 해당 문항 카드로 이동합니다.
+      const qnavHtml = shown.map(src => `
+        <div class="qnav-title">${esc(src)}</div>
+        <div class="qnav-grid">${data.filter(it => it.source === src).map(it =>
+          `<button class="qnav-btn" onclick="jumpQ('${it.id}', this)">${it.number}</button>`).join('')}</div>`).join('');
+      $('examPanel').innerHTML = qnavHtml;
+      $('qSheetBody').innerHTML = qnavHtml;
+      $('qFab').hidden = false;
       data.forEach(it => loadRating(it.id));
       applyDeleteVisibility();
       loadMyAnswers();
@@ -942,6 +980,23 @@
     render('');
   }
 
+  // 왼쪽 번호 메뉴를 누르면 해당 문항 카드로 스크롤하고, 누른 번호를 강조합니다.
+  function jumpQ(id, btn) {
+    const el = document.getElementById('q-' + id);
+    if (!el) return;
+    document.querySelectorAll('.qnav-btn.on').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    closeQSheet();
+  }
+
+  // 휴대폰: '문제 선택' 버튼을 누르면 아래에서 번호 판이 올라옵니다.
+  function openQSheet() { $('qSheet').classList.add('open'); $('qSheetBg').classList.add('open'); }
+  function closeQSheet() { $('qSheet').classList.remove('open'); $('qSheetBg').classList.remove('open'); }
+  $('qFab').onclick = openQSheet;
+  $('qSheetClose').onclick = closeQSheet;
+  $('qSheetBg').onclick = closeQSheet;
+
   function examCard(it) {
     const pts = it.points ? `${it.points}점` : '';
     const answerBlock = `
@@ -950,7 +1005,7 @@
         <div class="solution">${it.answer ? esc(it.answer) : '<span class="muted">정답이 아직 입력되지 않았습니다.</span>'}</div>
       </div>`;
     return `
-      <div class="card exam-card">
+      <div class="card exam-card" id="q-${it.id}">
         <div class="card-head">
           <span class="card-title">${it.number}번</span>
           <span class="muted">${esc(pts)}</span>
