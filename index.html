@@ -598,8 +598,19 @@
     loadRating(id);
   };
 
+  // 정답/풀이 열람 제한: 로그인하고, 이 문항에 답을 한 번 이상 제출해야 열 수 있습니다. (닫기는 항상 가능)
   window.toggleBlock = (id, kind) => {
     const box = $(`${kind}-${id}`);
+    if (box.hidden) {
+      if (!window.CURRENT_USER) {
+        openAuth('login');
+        return;
+      }
+      if (!(HISTORY[id] || []).length) {
+        alert('답을 먼저 제출한 뒤에 정답과 풀이를 볼 수 있습니다.');
+        return;
+      }
+    }
     box.hidden = !box.hidden;
   };
 
