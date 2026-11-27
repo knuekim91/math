@@ -14,7 +14,8 @@
   body { margin: 0; font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; background: var(--bg); color: var(--text); }
 
   header { background: var(--main); color: #fff; padding: 16px 28px; display: flex; align-items: center; gap: 12px; }
-  header .logo { width: 40px; height: 40px; border-radius: 8px; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: bold; }
+  header .logo { height: 40px; min-width: 40px; padding: 0 10px; border-radius: 8px; background: var(--accent); display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: bold; color: #fff; font-size: 13px; white-space: nowrap; }
+  header .logo .logo-eq { font-size: 13px; }
   header h1 { font-size: 20px; margin: 0; }
   header p { margin: 0; font-size: 13px; opacity: 0.85; }
 
@@ -229,15 +230,15 @@
 </head>
 <body>
 <header>
-  <div class="logo">
-    <svg viewBox="0 0 40 40" width="40" height="40" aria-hidden="true">
+  <div class="logo" title="성공 = Σ(성실 × 노력)">
+    <span class="logo-eq">성공 =</span>
+    <svg viewBox="0 0 40 40" width="32" height="32" aria-hidden="true">
       <text x="20" y="31" font-size="32" font-family="Times New Roman, serif" fill="#fff" text-anchor="middle">Σ</text>
     </svg>
   </div>
   <div>
     <h1>데프니의 수능 수학 탐구</h1>
     <p>마지막이라 생각말고 끝까지 최선을</p>
-    <p class="formula">성공 = Σ(성실 × 노력)</p>
   </div>
   <div id="authBox" class="auth"></div>
 </header>
