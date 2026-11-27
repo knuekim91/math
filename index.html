@@ -152,6 +152,8 @@
   figure.problem img { display: block; width: 100%; height: auto; }
   figure.problem figcaption { font-size: 12px; color: var(--muted); margin-top: 6px; text-align: right; }
   .exam-card .card-head { flex-wrap: wrap; }
+  .rate-badge { font-size: 12px; font-weight: bold; padding: 3px 10px; border-radius: 999px; background: #ecfdf5; color: #065f46; }
+  .rate-badge:empty { display: none; }
   .exam-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 6px; }
   .exam-chip { background: #fff; color: var(--main); border: 1px solid var(--main); border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: bold; cursor: pointer; }
   .exam-chip:hover { background: var(--main-light); }
@@ -556,6 +558,21 @@
   };
   db.auth.onAuthStateChange((_event, session) => renderAuth(session?.user || null));
 
+  // 문항별 정답률 (여러 학생의 최초 제출 기준)
+  async function loadCorrectRates() {
+    const rows = await fetch(`${SUPABASE_URL}/rest/v1/item_correct_rate?select=item_id,students,correct`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+    }).then(r => r.json()).catch(() => []);
+    if (!Array.isArray(rows)) return;
+    rows.forEach(r => {
+      const el = $('cr-' + r.item_id);
+      if (!el || !r.students) return;
+      const pct = Math.round((r.correct / r.students) * 100);
+      el.textContent = `정답률 ${pct}% (${r.students}명)`;
+      el.dataset.pct = pct;
+    });
+  }
+
   window.rate = async (id, stars) => {
     const user = await currentUser();
     if (!user) return showError('별점은 로그인 후 저장할 수 있습니다.');
@@ -872,6 +889,7 @@
       applyDeleteVisibility();
       loadMyAnswers();
       loadLikes();
+      loadCorrectRates();
     };
     $('items').innerHTML = `<div class="exam-chips">${chips.map(c =>
       `<button class="exam-chip" data-key="${esc(c.key)}">${esc(c.label)}</button>`).join('')}</div><div id="examBody"></div>`;
@@ -892,6 +910,7 @@
           <span class="card-title">${it.number}번</span>
           <span class="muted">${esc(pts)}</span>
           ${levelBadge(it.difficulty_level)}
+          <span class="rate-badge" id="cr-${it.id}"></span>
         </div>
         <img class="exam-img" loading="lazy" src="${esc(it.image_url)}" alt="${it.number}번 문항" />
         ${answerForm(it)}
