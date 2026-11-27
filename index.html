@@ -629,7 +629,8 @@
         alert('응시 중에는 정답과 풀이를 볼 수 없습니다. 제출하거나 시간이 끝난 뒤에 열어 주세요.');
         return;
       }
-      if (!(HISTORY[id] || []).length) {
+      const isAdmin = window.CURRENT_USER?.app_metadata?.role === 'admin';
+      if (!isAdmin && !(HISTORY[id] || []).length) {
         alert('답을 먼저 제출한 뒤에 정답과 풀이를 볼 수 있습니다.');
         return;
       }
