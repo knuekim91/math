@@ -215,6 +215,7 @@
     header > div:not(#authBox) { min-width: 0; flex: 1 1 auto; }
     header h1 { font-size: 18px; white-space: nowrap; }
     header p { font-size: 12px; white-space: nowrap; }
+    header p.formula { font-size: 12px; font-weight: bold; }
     #authBox.auth { margin-left: 0; width: 100%; flex-direction: column; align-items: stretch; gap: 6px; }
     #authBox .auth-user { text-align: right; }
     #authBox input { width: 100%; box-sizing: border-box; padding: 9px 10px; font-size: 14px; }
@@ -236,6 +237,7 @@
   <div>
     <h1>데프니의 수능 수학 탐구</h1>
     <p>마지막이라 생각말고 끝까지 최선을</p>
+    <p class="formula">성공 = Σ(성실 × 노력)</p>
   </div>
   <div id="authBox" class="auth"></div>
 </header>
@@ -305,6 +307,21 @@
   const SUBJ_HTML = {};
 
   const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // 방문 기록: 페이지를 열 때 한 줄 저장합니다. 기기마다 임의의 ID(visitor_id)를 브라우저에 보관하며,
+  // 로그인한 경우에는 계정 ID(user_id)도 함께 저장합니다. 저장 실패는 사이트 동작에 영향을 주지 않습니다.
+  (async function logVisit() {
+    try {
+      let vid = localStorage.getItem('visitor_id');
+      if (!vid) {
+        vid = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2));
+        localStorage.setItem('visitor_id', vid);
+      }
+      const { data } = await db.auth.getSession();
+      const uid = data && data.session ? data.session.user.id : null;
+      await db.from('visits').insert({ visitor_id: vid, user_id: uid });
+    } catch (e) { /* 방문 기록 실패는 무시 */ }
+  })();
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
