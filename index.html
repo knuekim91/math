@@ -434,11 +434,17 @@
     });
   }
 
+  // 이름은 저장 후 입력창을 숨기고, '이름 변경'을 눌렀을 때만 입력창을 보입니다.
+  let nameEditing = false;
+  window.editName = () => { nameEditing = true; renderAuth(window.CURRENT_USER); };
+
   function renderAuth(user) {
     window.CURRENT_USER = user || null;
     applyDeleteVisibility();
     $('authBox').innerHTML = user
-      ? `<span class="auth-user">${esc(user.user_metadata?.name || user.email)}</span><input id="authName" placeholder="표시 이름" value="${esc(user.user_metadata?.name || '')}" /><button class="auth-btn" onclick="saveName()">이름 저장</button><button class="auth-btn" onclick="logout()">로그아웃</button>`
+      ? `<span class="auth-user">${esc(user.user_metadata?.name || user.email)}</span>${nameEditing || !user.user_metadata?.name
+          ? `<input id="authName" placeholder="표시 이름" value="${esc(user.user_metadata?.name || '')}" /><button class="auth-btn" onclick="saveName()">이름 저장</button>`
+          : `<button class="auth-btn" onclick="editName()">이름 변경</button>`}<button class="auth-btn" onclick="logout()">로그아웃</button>`
       : `<button class="auth-btn" onclick="openAuth('login')">로그인</button>
          <button class="auth-btn" onclick="openAuth('signup')">회원가입</button>`;
   }
@@ -544,6 +550,7 @@
     if (!user) return msg('로그인이 끝나지 않았습니다. 메일 링크로 다시 로그인해 주세요.');
     const { data, error } = await db.auth.updateUser({ data: { name } });
     if (error) return msg('이름 저장 실패: ' + error.message);
+    nameEditing = false;
     renderAuth(data.user);
     msg('이름이 저장되었습니다.');
   };
