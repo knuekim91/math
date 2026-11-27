@@ -498,6 +498,15 @@
   document.getElementById('authModal').addEventListener('click', (e) => {
     if (e.target.id === 'authModal') closeAuth();
   });
+  // 이메일/비밀번호 칸에서 Enter를 누르면 로그인(또는 회원가입) 버튼을 누른 것과 같습니다.
+  ['authEmail', 'authPw'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); submitAuth(); }
+    });
+  });
+  document.getElementById('newPw').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); setNewPw(); }
+  });
 
   // 비밀번호 재설정: 메일 발송 → 메일 링크로 들어오면 새 비밀번호 설정 팝업
   window.forgotPw = async () => {
