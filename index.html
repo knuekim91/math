@@ -442,6 +442,16 @@
 
   function renderAuth(user) {
     window.CURRENT_USER = user || null;
+    // 로그인 상태가 바뀌면(로그인/로그아웃) 이전 사용자의 답·좋아요 표시를 지우고 목록을 다시 그립니다.
+    const loggedIn = !!user;
+    if (window.LAST_LOGGED_IN !== undefined && window.LAST_LOGGED_IN !== loggedIn) {
+      Object.keys(HISTORY).forEach(k => delete HISTORY[k]);
+      Object.keys(LIKE_MINE).forEach(k => delete LIKE_MINE[k]);
+      Object.keys(PENDING).forEach(k => delete PENDING[k]);
+      $('error').textContent = '';
+      if ($('side') && $('side').classList.contains('view-exam')) showExam('고1');
+    }
+    window.LAST_LOGGED_IN = loggedIn;
     applyDeleteVisibility();
     $('authBox').innerHTML = user
       ? `<span class="auth-user">${esc(user.user_metadata?.name || user.email)}</span>${nameEditing || !user.user_metadata?.name
