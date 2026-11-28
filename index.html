@@ -944,10 +944,11 @@
   });
   $('side').classList.add('view-concept');
 
-  // 전국연합 문항: DB(items)에서 EXAM-1G 문항을 읽어 카드로 보여줍니다.
+  // 전국연합 문항: DB(items)에서 EXAM-1G(고1) / EXAM-2G(고2) 문항을 읽어 카드로 보여줍니다.
+  const EXAM_PREFIX = { '고1': 'EXAM-1G-%', '고2': 'EXAM-2G-%' };
   async function showExam(grade) {
     $('heading').textContent = `전국연합 ${grade}`;
-    if (grade !== '고1') {
+    if (!EXAM_PREFIX[grade]) {
       $('sub').textContent = '';
       $('items').innerHTML = '<div class="empty">준비 중입니다.</div>';
       $('examPanel').textContent = '전국연합 기출 문항은 준비 중입니다.';
@@ -958,7 +959,7 @@
     $('items').innerHTML = '<div class="muted">불러오는 중…</div>';
     const { data, error } = await db.from('items')
       .select('id, source, number, points, image_url, answer, difficulty_level, solution_steps, alt_solutions')
-      .like('id', 'EXAM-1G-%')
+      .like('id', EXAM_PREFIX[grade])
       .order('id');
     if (error) return showError(error.message);
     data.forEach(it => { ITEMS[it.id] = it; it.alt_solutions = []; });
